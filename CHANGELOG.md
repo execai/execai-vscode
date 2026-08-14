@@ -3,6 +3,16 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.1 — 2026-08-15
+
+### Changed
+
+- Marketplace keywords widened from 7 to 28: Cyrillic queries (ии, нейросеть, агент,
+  ассистент, терминал), the tools people look for a replacement to (claude code,
+  copilot, codex, cline), and the providers behind the sources (ollama, kimi, glm,
+  deepseek, qwen, anthropic, openai). `displayName`, `description` and `keywords` are
+  what the Marketplace text search indexes, and the card language stays English.
+
 ## 0.2.0 — 2026-08-15
 
 First public release.
