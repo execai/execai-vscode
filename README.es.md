@@ -1,6 +1,6 @@
 [English](README.md) | [Русский](README.ru.md) | **Español** | [Deutsch](README.de.md) | [中文](README.zh.md)
 
-🖥 **El agente en sí:** [execai/execai-agent](https://github.com/execai/execai-agent) · 📦 [Releases](https://github.com/execai/execai-vscode/releases)
+🌐 **Sitio web:** [execai.ru](https://execai.ru) · 💬 Chat web: [chat.execai.ru](https://chat.execai.ru) · 🖥 CLI: [execai/execai-agent](https://github.com/execai/execai-agent)
 
 ---
 
