@@ -1,0 +1,16 @@
+{
+  "displayName": "ExecAI — terminal AI agent",
+  "description": "The execai agent in your sidebar: streaming chat, tools with confirmations, file and selection context. Works in VS Code and Cursor.",
+  "view.chat": "Chat",
+  "cmd.newChat": "ExecAI: New chat",
+  "cmd.stop": "ExecAI: Stop the turn",
+  "cmd.restart": "ExecAI: Restart the agent",
+  "cmd.openTerminal": "ExecAI: Open in a terminal",
+  "cmd.sendSelection": "ExecAI: Send the selection to the agent",
+  "cmd.attachFile": "ExecAI: Attach a file to the chat",
+  "cmd.installAgent": "ExecAI: Install/update the agent (CLI)",
+  "cfg.binaryPath": "Path to the execai binary. Empty or \"execai\" — the extension finds it in PATH or fetches it itself.",
+  "cfg.maxIterations": "Tool iteration limit per turn (0 — take it from the execai config).",
+  "cfg.attachContext": "Attach the active file and selection to the message.",
+  "cfg.autoInstall": "Offer to download the execai agent when it is missing or outdated."
+}

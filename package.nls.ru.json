@@ -1,0 +1,16 @@
+{
+  "displayName": "ExecAI — терминальный AI-агент",
+  "description": "Агент execai в сайдбаре: чат со стримом, инструменты с подтверждениями, контекст файла и выделения. Работает в VS Code и Cursor.",
+  "view.chat": "Чат",
+  "cmd.newChat": "ExecAI: Новый чат",
+  "cmd.stop": "ExecAI: Остановить ход",
+  "cmd.restart": "ExecAI: Перезапустить агента",
+  "cmd.openTerminal": "ExecAI: Открыть в терминале",
+  "cmd.sendSelection": "ExecAI: Отправить выделенное агенту",
+  "cmd.attachFile": "ExecAI: Приложить файл к чату",
+  "cmd.installAgent": "ExecAI: Установить/обновить агента (CLI)",
+  "cfg.binaryPath": "Путь к бинарю execai. Пусто/execai — плагин найдёт его в PATH или принесёт сам.",
+  "cfg.maxIterations": "Предел итераций инструментов на один ход (0 — из конфига execai).",
+  "cfg.attachContext": "Прикладывать активный файл и выделение к сообщению.",
+  "cfg.autoInstall": "Предлагать скачать агента execai, если он не найден или устарел."
+}

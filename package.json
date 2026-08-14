@@ -1,0 +1,153 @@
+{
+  "name": "execai",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "0.2.0",
+  "publisher": "execai",
+  "license": "BUSL-1.1",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/execai/execai-vscode.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "chat",
+    "execai",
+    "claude",
+    "gpt",
+    "cursor"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "execai",
+          "title": "ExecAI",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "execai": [
+        {
+          "type": "webview",
+          "id": "execai.chat",
+          "name": "%view.chat%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "execai.newChat",
+        "title": "%cmd.newChat%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "execai.stop",
+        "title": "%cmd.stop%",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "execai.restart",
+        "title": "%cmd.restart%"
+      },
+      {
+        "command": "execai.openTerminal",
+        "title": "%cmd.openTerminal%"
+      },
+      {
+        "command": "execai.sendSelection",
+        "title": "%cmd.sendSelection%"
+      },
+      {
+        "command": "execai.attachFile",
+        "title": "%cmd.attachFile%"
+      },
+      {
+        "command": "execai.installAgent",
+        "title": "%cmd.installAgent%"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "execai.newChat",
+          "when": "view == execai.chat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "execai.stop",
+          "when": "view == execai.chat",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "execai.sendSelection",
+          "when": "editorHasSelection",
+          "group": "execai@1"
+        },
+        {
+          "command": "execai.attachFile",
+          "group": "execai@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "execai.attachFile",
+          "group": "execai@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "ExecAI",
+      "properties": {
+        "execai.binaryPath": {
+          "type": "string",
+          "default": "execai",
+          "description": "%cfg.binaryPath%"
+        },
+        "execai.maxIterations": {
+          "type": "number",
+          "default": 0,
+          "description": "%cfg.maxIterations%"
+        },
+        "execai.attachContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "%cfg.attachContext%"
+        },
+        "execai.autoInstall": {
+          "type": "boolean",
+          "default": true,
+          "description": "%cfg.autoInstall%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "test": "npx esbuild src/protocol.ts --bundle --platform=node --format=cjs --outfile=test/.protocol.cjs --log-level=silent && npx esbuild src/webviewHtml.ts --bundle --platform=node --format=cjs --external:vscode --outfile=test/.webviewHtml.cjs --log-level=silent && npx esbuild src/version.ts --bundle --platform=node --format=cjs --outfile=test/.install.cjs --log-level=silent && node --test \"test/*.test.mjs\"",
+    "package": "npm run build && npx @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  }
+}
