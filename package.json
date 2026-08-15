@@ -2,7 +2,7 @@
   "name": "execai",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "publisher": "execai",
   "license": "BUSL-1.1",
   "icon": "media/icon.png",
@@ -155,6 +155,11 @@
           "type": "boolean",
           "default": true,
           "description": "%cfg.autoInstall%"
+        },
+        "execai.resumeLastChat": {
+          "type": "boolean",
+          "default": true,
+          "description": "Continue the last chat of this project when the panel opens. Turn off to start from a clean slate every time."
         }
       }
     }

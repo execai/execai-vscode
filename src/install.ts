@@ -25,13 +25,12 @@ export { versionAtLeast };
 /**
  * Oldest CLI version this extension works with.
  *
- * R6.49 introduced the IDE protocol; R6.56 added the security levels and the
- * account commands the panel now offers, and — more importantly — closed the
- * permission bypasses. Pointing at an older CLI would mean shipping a panel
- * whose menu entries silently do nothing, on top of a binary that asks fewer
- * questions than it should.
+ * R6.49 introduced the IDE protocol; R6.56 added the security levels and closed
+ * the permission bypasses; R6.58 added `resume_last`, which the panel calls on
+ * every open. Pointing at an older CLI would mean a panel whose menu entries
+ * silently do nothing and an error notice on every start.
  */
-export const MIN_CLI = 'R6.56';
+export const MIN_CLI = 'R6.58';
 
 const MIRROR = 'https://storage.yandexcloud.net/execai-agent-prod/execai/stable';
 const GITHUB = 'https://github.com/execai/execai-agent/releases/latest/download';

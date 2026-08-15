@@ -29,6 +29,7 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     secs: 's',
     notSignedIn: 'not signed in',
     mSecurity: 'Security level',
+    mResume: 'Continue the last chat',
     mModel: 'Model',
     mSource: 'Source',
     mConnect: 'Connect a source',
@@ -74,6 +75,7 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     secs: 'с',
     notSignedIn: 'не вошёл',
     mSecurity: 'Уровень безопасности',
+    mResume: 'Продолжить последний чат',
     mModel: 'Модель',
     mSource: 'Источник',
     mConnect: 'Подключить источник',
@@ -584,6 +586,10 @@ function menuRoot() {
     }, false, 'login'));
   }
   menu.appendChild(el('div', 'sep'));
+  menu.appendChild(mi(T.mResume, '', () => {
+    closeMenu();
+    vscode.postMessage({ type: 'agent_command', name: 'resume_last' });
+  }, false, 'resume'));
   menu.appendChild(mi(T.mNewChat, '', () => { closeMenu(); vscode.postMessage({ type: 'new_chat_ui' }); }, false, 'newchat'));
   menu.appendChild(mi(T.mRestart, '', () => { closeMenu(); vscode.postMessage({ type: 'restart' }); }, false, 'restart'));
   menu.appendChild(mi(T.mTerminal, '', () => { closeMenu(); vscode.postMessage({ type: 'open_terminal' }); }, false, 'terminal'));

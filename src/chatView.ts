@@ -103,6 +103,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.status.text = this.statusMain = `ExecAI: ${e.model ?? '?'} · ${e.source ?? ''}`;
         // Ask for state right away: the model/source pickers must not wait for a click.
         this.client?.sendCommand('state');
+        // Продолжаем последний чат этого проекта.
+        //
+        // Панель открывалась с чистого листа, и разговор приходилось искать
+        // в истории вручную — в терминале для этого есть /resume, а здесь не
+        // было ничего. Редактор — место, куда возвращаются: чат обязан
+        // продолжаться сам. Отключается настройкой, если кому-то нужен
+        // каждый раз чистый лист.
+        if (vscode.workspace.getConfiguration('execai').get<boolean>('resumeLastChat', true)) {
+          this.client?.sendCommand('resume_last');
+        }
         if ((e.protocol ?? 0) > PROTOCOL) {
           this.toWebview({
             type: 'notice',

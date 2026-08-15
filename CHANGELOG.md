@@ -3,6 +3,20 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.4 — 2026-08-15
+
+### Added
+
+- **The last chat of the project is continued when the panel opens.** The panel used
+  to start from a clean slate: the conversation was still there, but you had to dig it
+  out of the history by hand. An editor is a place you come back to, so the chat now
+  comes back with you. `execai.resumeLastChat` turns it off; «Continue the last chat»
+  in the `>_` menu does it on demand.
+
+### Changed
+
+- **Requires CLI R6.58 or newer** — that release added the `resume_last` command.
+
 ## 0.2.3 — 2026-08-15
 
 ### Fixed
