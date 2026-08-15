@@ -2,7 +2,7 @@
   "name": "execai",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "execai",
   "license": "BUSL-1.1",
   "icon": "media/icon.png",
@@ -162,7 +162,7 @@
   "scripts": {
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
-    "test": "npx esbuild src/protocol.ts --bundle --platform=node --format=cjs --outfile=test/.protocol.cjs --log-level=silent && npx esbuild src/webviewHtml.ts --bundle --platform=node --format=cjs --external:vscode --outfile=test/.webviewHtml.cjs --log-level=silent && npx esbuild src/version.ts --bundle --platform=node --format=cjs --outfile=test/.install.cjs --log-level=silent && node --test \"test/*.test.mjs\"",
+    "test": "npx esbuild src/markdown.ts --bundle --platform=node --format=cjs --outfile=test/.markdown.cjs --log-level=silent && npx esbuild src/protocol.ts --bundle --platform=node --format=cjs --outfile=test/.protocol.cjs --log-level=silent && npx esbuild src/webviewHtml.ts --bundle --platform=node --format=cjs --external:vscode --outfile=test/.webviewHtml.cjs --log-level=silent && npx esbuild src/version.ts --bundle --platform=node --format=cjs --outfile=test/.install.cjs --log-level=silent && node --test \"test/*.test.mjs\"",
     "package": "npm run build && npx @vscode/vsce package --no-dependencies"
   },
   "devDependencies": {

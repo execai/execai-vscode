@@ -10,6 +10,7 @@
 // the static markup.
 
 import * as vscode from 'vscode';
+import { renderMarkdown } from './markdown';
 
 export type ChatLang = 'en' | 'ru';
 
@@ -114,6 +115,9 @@ export function pickLang(code?: string): ChatLang {
 
 export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lang?: string): string {
   const nonce = String(Math.random()).slice(2);
+  // Исходник рендерера уезжает в панель как есть: так у панели и у тестов
+  // одна и та же реализация, и разойтись они не могут.
+  const mdSource = renderMarkdown.toString();
   const code = pickLang(lang);
   const T = STRINGS[code];
   return /* html */ `<!DOCTYPE html>
@@ -134,12 +138,50 @@ export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lan
   }
   #log { flex: 1; overflow-y: auto; padding: 8px; }
   .msg { margin: 0 0 10px; white-space: pre-wrap; word-break: break-word; }
+  /* An answer brings its own block spacing; pre-wrap would add the blank
+     lines of the original markdown on top of it. */
+  .msg.assistant { white-space: normal; }
   .user {
     background: var(--vscode-input-background);
     border: 1px solid var(--vscode-input-border, transparent);
     border-radius: 8px; padding: 6px 9px;
   }
   .assistant { padding: 0 2px; }
+  /* Markdown in answers. Models reply with tables, code and lists; without
+     this the message arrived as raw text full of pipe characters. */
+  .assistant p { margin: 0 0 8px; }
+  .assistant p:last-child { margin-bottom: 0; }
+  .assistant h3, .assistant h4, .assistant h5, .assistant h6 {
+    margin: 10px 0 6px; font-size: 13px; font-weight: 600;
+  }
+  .assistant ul, .assistant ol { margin: 4px 0 8px; padding-left: 20px; }
+  .assistant li { margin: 2px 0; }
+  .assistant blockquote {
+    margin: 6px 0; padding: 2px 0 2px 9px;
+    border-left: 2px solid var(--vscode-panel-border);
+    color: var(--vscode-descriptionForeground);
+  }
+  .assistant hr { border: none; border-top: 1px solid var(--vscode-panel-border); margin: 10px 0; }
+  .assistant code {
+    font-family: var(--vscode-editor-font-family); font-size: 11.5px;
+    background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+    border-radius: 3px; padding: 1px 4px;
+  }
+  .assistant pre.code {
+    margin: 6px 0; padding: 7px 9px; overflow-x: auto;
+    background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+    border: 1px solid var(--vscode-panel-border); border-radius: 5px;
+  }
+  .assistant pre.code code { background: none; padding: 0; font-size: 11.5px; }
+  /* The panel is narrow and tables are wide: scroll the TABLE, not the whole
+     panel, or the surrounding text drifts with it. */
+  .assistant .tablewrap { overflow-x: auto; margin: 6px 0; }
+  .assistant table { border-collapse: collapse; font-size: 12px; }
+  .assistant th, .assistant td {
+    border: 1px solid var(--vscode-panel-border); padding: 3px 7px; vertical-align: top;
+  }
+  .assistant th { background: var(--vscode-editor-background); font-weight: 600; }
+  .assistant a { color: var(--vscode-textLink-foreground); }
   .thinking {
     color: var(--vscode-descriptionForeground);
     font-style: italic; font-size: 12px;
@@ -365,6 +407,14 @@ export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lan
 
 <script nonce="${nonce}">
 const T = ${JSON.stringify(T)};
+// The markdown renderer: the very source the tests cover (src/markdown.ts).
+//
+// Bound to a name explicitly. The release build is minified, so the function
+// arrives here renamed to a single letter — a bare declaration left the panel
+// calling a renderMarkdown() that did not exist, and answers fell back to raw
+// text. Unit tests run an unminified bundle and could not see it; the live
+// editor run did.
+const renderMarkdown = ${mdSource};
 const vscode = acquireVsCodeApi();
 const log = document.getElementById('log');
 const inp = document.getElementById('inp');
@@ -762,8 +812,12 @@ window.addEventListener('message', (ev) => {
       // MiniMax-class models send a trailing "</think>" as the first line — hide it.
       let t = e.text || '';
       const a = assistant();
-      a.textContent += t;
-      a.textContent = a.textContent.replace(/^\\s*<\\/think>\\s*/, '');
+      // Keep the raw text aside and re-render the whole block: markdown cannot
+      // be appended piecewise — a table only becomes a table together with its
+      // divider row, and that arrives in a later token.
+      a._md = (a._md || '') + t;
+      a._md = a._md.replace(/^\\s*<\\/think>\\s*/, '');
+      a.innerHTML = renderMarkdown(a._md);
       scroll();
       break;
     }
@@ -835,7 +889,12 @@ window.addEventListener('message', (ev) => {
       tools = {}; curAssistant = null; curThinking = null;
       for (const m of e.msgs || []) {
         if (m.role === 'user') log.appendChild(el('div', 'msg user', m.text));
-        else if (m.role === 'assistant') log.appendChild(el('div', 'msg assistant', m.text));
+        else if (m.role === 'assistant') {
+          const a = el('div', 'msg assistant');
+          a._md = m.text || '';
+          a.innerHTML = renderMarkdown(a._md);
+          log.appendChild(a);
+        }
         else if (m.role === 'tool') {
           const box = el('div', 'tool');
           const head = el('div', 'tool-head');

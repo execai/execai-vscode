@@ -3,6 +3,19 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.3 — 2026-08-15
+
+### Fixed
+
+- **Answers are rendered as markdown.** Tables arrived as raw text full of pipe
+  characters, and so did code blocks, lists and emphasis — the panel inserted the
+  answer as plain text. Tables now scroll inside their own box, so a wide table no
+  longer drags the surrounding text sideways.
+
+Everything the model writes is escaped before any markup is produced, and links are
+limited to `http`, `https` and `mailto`: an answer may repeat whatever it read on the
+web, and none of it gets to run in the panel.
+
 ## 0.2.2 — 2026-08-15
 
 ### Added

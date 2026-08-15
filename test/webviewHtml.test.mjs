@@ -83,3 +83,30 @@ test('the language is picked from the editor, English is the default', () => {
   assert.ok(chatHtml({}, {}, 'ru-RU').includes('<html lang="ru">'));
   assert.ok(!/[А-Яа-я]/.test(chatHtml({}, {})), 'the English panel must have no Cyrillic left');
 });
+
+
+// Рендерер разметки обязан быть ПРИВЯЗАН К ИМЕНИ в панели.
+//
+// Он попадает туда через toString(), а релизная сборка минифицируется и
+// переименовывает функцию: голое объявление оставляло панель с вызовом
+// несуществующего renderMarkdown, и ответы приходили сырым текстом. Юниты
+// гоняют неминифицированную сборку и этого не видят — поэтому проверяем
+// форму вставки.
+import { test as test3 } from 'node:test';
+import assert3 from 'node:assert/strict';
+import { createRequire as cr3 } from 'node:module';
+import Module3 from 'node:module';
+
+test3('рендерер разметки привязан к имени, а не объявлен', () => {
+  const req = cr3(import.meta.url);
+  const orig = Module3._resolveFilename;
+  Module3._resolveFilename = function (r, ...a) { return r === 'vscode' ? 'vscode' : orig.call(this, r, ...a); };
+  req.cache['vscode'] = { exports: {} };
+  const { chatHtml } = req('./.webviewHtml.cjs');
+  Module3._resolveFilename = orig;
+  const html = chatHtml({}, {});
+  assert3.ok(/const renderMarkdown\s*=\s*function/.test(html),
+    'нет привязки «const renderMarkdown = function…» — при минификации имя потеряется');
+  assert3.ok(html.includes('a.innerHTML = renderMarkdown('),
+    'поток ответа обязан проходить через рендерер');
+});
