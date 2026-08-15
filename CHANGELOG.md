@@ -3,6 +3,30 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.2 — 2026-08-15
+
+### Added
+
+- **Security level** in the `>_` menu: `light` / `deep` / `paranoid`. The level decides
+  what the agent does silently — reads outside the project, secrets, network calls — and
+  is shared with the terminal, so setting it here changes it everywhere.
+- Sign in to ExecAI, connect and disconnect providers, reasoning level and iteration
+  limit, all from the panel. The key for a provider is asked in an editor input and never
+  leaves your machine.
+- Stable `data-mi` anchors on menu entries so the automated run can find them regardless
+  of the editor's display language.
+
+### Changed
+
+- **Requires CLI R6.56 or newer** (was R6.49). That release closed the permission bypasses
+  and added the commands this panel now offers; pointing at an older binary would mean
+  menu entries that silently do nothing.
+
+### Fixed
+
+- The stop button was visible and spinning at rest: a higher-specificity CSS rule beat
+  its `display: none`. Its animations now run only while a turn is in flight.
+
 ## 0.2.1 — 2026-08-15
 
 ### Changed

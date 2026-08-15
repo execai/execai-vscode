@@ -27,6 +27,7 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     stopTitle: 'Stop the turn',
     secs: 's',
     notSignedIn: 'not signed in',
+    mSecurity: 'Security level',
     mModel: 'Model',
     mSource: 'Source',
     mConnect: 'Connect a source',
@@ -71,6 +72,7 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     stopTitle: 'Остановить ход',
     secs: 'с',
     notSignedIn: 'не вошёл',
+    mSecurity: 'Уровень безопасности',
     mModel: 'Модель',
     mSource: 'Источник',
     mConnect: 'Подключить источник',
@@ -463,7 +465,8 @@ document.getElementById('filesBtn').onclick = () => vscode.postMessage({ type: '
 const menu = document.getElementById('menu');
 const statusEl = document.getElementById('status');
 let stateData = { model: '', source: '', models: [], sources: [],
-                   efforts: [], connectable: [], user: '', effort: '', maxIter: 0 };
+                   efforts: [], connectable: [], securities: [], security: '',
+                   user: '', effort: '', maxIter: 0 };
 let chatsData = [];
 let menuView = null; // null | 'root' | 'models' | 'sources' | 'chats'
 
@@ -489,8 +492,12 @@ statusEl.onclick = () => {
   else { vscode.postMessage({ type: 'agent_command', name: 'state' }); menuRoot(); }
 };
 
-function mi(label, extra, onclick, checked) {
+// key is a stable test anchor. Labels are translated, so a test that finds a
+// menu entry by its text breaks when the editor language changes (caught by
+// the self-test run: the profile was English, assertions looked for Russian).
+function mi(label, extra, onclick, checked, key) {
   const d = el('div', 'mi');
+  if (key) d.setAttribute('data-mi', key);
   d.appendChild(el('span', 'check', checked ? '✓' : ''));
   const g = el('span', 'grow', label);
   d.appendChild(g);
@@ -502,33 +509,34 @@ function closeMenu() { menu.classList.remove('open'); menuView = null; }
 function menuRoot() {
   menuView = 'root';
   menu.innerHTML = '';
-  menu.appendChild(mi(T.mModel, stateData.model || '…', () => menuList('models'), false));
-  menu.appendChild(mi(T.mSource, stateData.source || '…', () => menuList('sources'), false));
-  menu.appendChild(mi(T.mConnect, '', () => menuList('connectable'), false));
+  menu.appendChild(mi(T.mModel, stateData.model || '…', () => menuList('models'), false, 'models'));
+  menu.appendChild(mi(T.mSource, stateData.source || '…', () => menuList('sources'), false, 'sources'));
+  menu.appendChild(mi(T.mConnect, '', () => menuList('connectable'), false, 'connect'));
   menu.appendChild(el('div', 'sep'));
-  menu.appendChild(mi(T.mEffort, stateData.effort || '…', () => menuList('efforts'), false));
+  menu.appendChild(mi(T.mEffort, stateData.effort || '…', () => menuList('efforts'), false, 'efforts'));
+  menu.appendChild(mi(T.mSecurity, stateData.security || '…', () => menuList('securities'), false, 'securities'));
   menu.appendChild(mi(T.mMaxIter, String(stateData.maxIter || ''), () => {
     closeMenu();
     vscode.postMessage({ type: 'agent_command', name: 'set_max_iterations' });
-  }, false));
+  }, false, 'maxiter'));
   menu.appendChild(el('div', 'sep'));
   if (stateData.user) {
     menu.appendChild(mi(T.mLogout, stateData.user, () => {
       closeMenu();
       vscode.postMessage({ type: 'agent_command', name: 'logout' });
-    }, false));
+    }, false, 'logout'));
   } else {
     menu.appendChild(mi(T.mLogin, T.loginNone, () => {
       closeMenu();
       log.appendChild(el('div', 'notice', T.openingBrowser));
       scroll();
       vscode.postMessage({ type: 'agent_command', name: 'login' });
-    }, false));
+    }, false, 'login'));
   }
   menu.appendChild(el('div', 'sep'));
-  menu.appendChild(mi(T.mNewChat, '', () => { closeMenu(); vscode.postMessage({ type: 'new_chat_ui' }); }, false));
-  menu.appendChild(mi(T.mRestart, '', () => { closeMenu(); vscode.postMessage({ type: 'restart' }); }, false));
-  menu.appendChild(mi(T.mTerminal, '', () => { closeMenu(); vscode.postMessage({ type: 'open_terminal' }); }, false));
+  menu.appendChild(mi(T.mNewChat, '', () => { closeMenu(); vscode.postMessage({ type: 'new_chat_ui' }); }, false, 'newchat'));
+  menu.appendChild(mi(T.mRestart, '', () => { closeMenu(); vscode.postMessage({ type: 'restart' }); }, false, 'restart'));
+  menu.appendChild(mi(T.mTerminal, '', () => { closeMenu(); vscode.postMessage({ type: 'open_terminal' }); }, false, 'terminal'));
   menu.classList.add('open');
 }
 function menuList(kind) {
@@ -539,11 +547,11 @@ function menuList(kind) {
   back.onclick = menuRoot;
   head.appendChild(back);
   const titles = { models: T.mModel, sources: T.mSource,
-                   efforts: T.mEffort, connectable: T.mConnect };
+                   efforts: T.mEffort, connectable: T.mConnect, securities: T.mSecurity };
   head.appendChild(el('span', '', titles[kind] || kind));
   menu.appendChild(head);
   const cmdFor = { models: 'set_model', sources: 'set_source',
-                   efforts: 'set_effort', connectable: 'connect' };
+                   efforts: 'set_effort', connectable: 'connect', securities: 'set_security' };
   const items = stateData[kind] || [];
   if (!items.length) menu.appendChild(el('div', 'mi', T.listEmpty));
   for (const it of items) {
@@ -554,7 +562,7 @@ function menuList(kind) {
       // key prompt in the editor.
       if (kind === 'sources') menuRoot();
       else closeMenu();
-    }, !!it.active));
+    }, !!it.active, 'item:' + it.id));
   }
 }
 function menuChats() {
@@ -845,6 +853,7 @@ window.addEventListener('message', (ev) => {
       stateData = { model: e.model || '', source: e.source || '',
                     models: e.models || [], sources: e.sources || [],
                     efforts: e.efforts || [], connectable: e.connectable || [],
+                    securities: e.securities || [], security: e.security || '',
                     user: e.user || '', effort: e.effort || '', maxIter: e.max_iter || 0 };
       renderStatus();
       // redraw whichever menu view is open with the hot data

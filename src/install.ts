@@ -22,8 +22,16 @@ import { versionAtLeast } from './version';
 
 export { versionAtLeast };
 
-/** Oldest CLI version that speaks the IDE protocol (`execai ide`). */
-export const MIN_CLI = 'R6.49';
+/**
+ * Oldest CLI version this extension works with.
+ *
+ * R6.49 introduced the IDE protocol; R6.56 added the security levels and the
+ * account commands the panel now offers, and — more importantly — closed the
+ * permission bypasses. Pointing at an older CLI would mean shipping a panel
+ * whose menu entries silently do nothing, on top of a binary that asks fewer
+ * questions than it should.
+ */
+export const MIN_CLI = 'R6.56';
 
 const MIRROR = 'https://storage.yandexcloud.net/execai-agent-prod/execai/stable';
 const GITHUB = 'https://github.com/execai/execai-agent/releases/latest/download';
