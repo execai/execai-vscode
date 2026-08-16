@@ -48,5 +48,7 @@
   "ExecAI Studio {0} is out (you are on {1}).": "Вышла ExecAI Studio {0} (у тебя {1}).",
   "Skip this version": "Пропустить эту версию",
   "Copy link": "Скопировать ссылку",
-  "The agent is starting — repeat the action in a moment.": "Агент запускается — повтори действие через секунду."
+  "The agent is starting — repeat the action in a moment.": "Агент запускается — повтори действие через секунду.",
+  "{0} (active file)": "{0} (активный файл)",
+  "{0} + selection (active file)": "{0} + выделение (активный файл)"
 }

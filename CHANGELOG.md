@@ -3,6 +3,26 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.12 — 2026-08-17
+
+### Changed
+
+- **The empty panel now says how to attach files: drag with Shift held, Ctrl+V,
+  or the + button.** VS Code disables pointer events on webviews during drags
+  and only delivers the drop when Shift is pressed (vscode#209211) — without
+  Shift the file lands in the editor as a tab instead. Core-patched editors
+  like Cursor sidestep this; we document it instead.
+
+## 0.2.11 — 2026-08-17
+
+### Fixed
+
+- **The auto-attached context is visible now.** Dropping a file onto the editor
+  opens it as a tab, and the panel quietly attached that active file to the next
+  message — the agent knew about a file the chat never showed. The sent message
+  now carries a muted «📎 file (active file)» line, and «+ selection» when a
+  selection went along. `execai.attachContext` still turns the attach off.
+
 ## 0.2.10 — 2026-08-16
 
 ### Added

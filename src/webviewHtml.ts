@@ -17,7 +17,7 @@ export type ChatLang = 'en' | 'ru';
 /** Exported for the unit test that keeps the bundles in key parity. */
 export const STRINGS: Record<ChatLang, Record<string, string>> = {
   en: {
-    empty: 'Describe a task — the agent works right inside your project folder.\nThe active file and selection are attached automatically (execai.attachContext setting).',
+    empty: 'Describe a task — the agent works right inside your project folder.\nThe active file and selection are attached automatically (execai.attachContext setting).\nFiles: hold Shift to drag them here, paste with Ctrl+V, or use the + button.',
     statusTitle: 'Model and source — click to change',
     placeholder: 'What should be done in this project?',
     attachTitle: 'Attach files',
@@ -64,7 +64,7 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     restartBtn: 'Restart',
   },
   ru: {
-    empty: 'Опиши задачу — агент работает прямо в папке проекта.\nАктивный файл и выделение прикладываются автоматически (настройка execai.attachContext).',
+    empty: 'Опиши задачу — агент работает прямо в папке проекта.\nАктивный файл и выделение прикладываются автоматически (настройка execai.attachContext).\nФайлы: перетаскивай сюда с зажатым Shift, вставляй Ctrl+V или кнопкой +.',
     statusTitle: 'Модель и источник — клик, чтобы сменить',
     placeholder: 'Что сделать в этом проекте?',
     attachTitle: 'Приложить файлы',
@@ -267,6 +267,11 @@ export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lan
   #chips .chip i:hover { opacity: 1; }
   #chips .chip img { height: 44px; max-width: 90px; object-fit: cover;
                      border-radius: 4px; display: block; }
+  .ctxline {
+    margin-top: 5px; font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    word-break: break-all;
+  }
   .gallery { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
   .gallery img { max-height: 120px; max-width: 100%; border-radius: 6px;
                  border: 1px solid var(--vscode-panel-border); }
@@ -896,6 +901,15 @@ window.addEventListener('message', (ev) => {
     case 'files_attached':
       addAttachments(e.items || (e.paths || []).map(p => ({ path: p, label: p })));
       break;
+    case 'context_attached': {
+      // A muted line under the message that just went out: what the extension
+      // quietly added from the editor, so the chat never knows more than the eye.
+      const bubbles = log.querySelectorAll('.msg.user');
+      const last = bubbles[bubbles.length - 1];
+      if (last) last.appendChild(el('div', 'ctxline', '\u{1F4CE} ' + (e.text || '')));
+      scroll();
+      break;
+    }
     case 'chat_reset':
       log.innerHTML = '';
       tools = {}; curAssistant = null; curThinking = null;

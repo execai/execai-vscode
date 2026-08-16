@@ -183,6 +183,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const ctx = this.editorContext() ?? {};
         if (m.files?.length) ctx.files = m.files;
         this.client?.sendUser(m.text || '', ctx);
+        // The auto-attached context must be visible: the agent knowing about a
+        // file the chat never showed reads as spooky action at a distance —
+        // "the AI sees my file but the panel shows nothing".
+        if (ctx.path) {
+          this.toWebview({
+            type: 'context_attached',
+            text: ctx.selection
+              ? vscode.l10n.t('{0} + selection (active file)', ctx.path)
+              : vscode.l10n.t('{0} (active file)', ctx.path),
+          });
+        }
         break;
       }
       case 'pick_files':
