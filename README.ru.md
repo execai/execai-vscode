@@ -1,6 +1,6 @@
 [English](README.md) | **Русский** | [Español](README.es.md) | [Deutsch](README.de.md) | [中文](README.zh.md)
 
-🌐 **Сайт:** [execai.ru](https://execai.ru) · 💬 Веб-чат: [chat.execai.ru](https://chat.execai.ru) · 🖥 CLI: [execai/execai-agent](https://github.com/execai/execai-agent)
+🌐 **Сайт:** [execai.ru](https://execai.ru) · 💬 Веб-чат: [chat.execai.ru](https://chat.execai.ru) · 🖥 CLI: [execai/execai-agent](https://github.com/execai/execai-agent) · 🖥 Редактор: [ExecAI Studio](https://github.com/execai/execai-studio)
 
 ---
 
