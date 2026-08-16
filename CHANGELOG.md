@@ -3,6 +3,79 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.10 — 2026-08-16
+
+### Added
+
+- **The sign-in link can be taken by hand.** The browser still opens by itself,
+  but the panel now shows the link in a copyable box with a «copy the link»
+  button, and the notification gains a «Copy link» action — for SSH sessions,
+  headless boxes and signing in from a browser on another machine.
+
+### Fixed
+
+- **The panel no longer claims «Opening the browser…» when nothing is happening.**
+  With no project folder open the agent is not running, and every menu action used
+  to disappear into the void behind an optimistic notice. A dead agent now answers
+  honestly: open a folder, or wait — the agent is starting.
+
+## 0.2.9 — 2026-08-16
+
+### Changed
+
+- The Studio update check now picks the download for the current platform when
+  the channel offers per-platform links (Windows and macOS builds are joining
+  Linux).
+
+## 0.2.8 — 2026-08-16
+
+### Added
+
+- **ExecAI Studio checks for its own updates** — the Yandex mirror first, GitHub
+  Releases second, on start and every six hours. A new version is an offer with a
+  download link, never a silent replacement; «skip this version» is remembered.
+  Outside Studio nothing happens.
+
+## 0.2.7 — 2026-08-16
+
+### Added
+
+- **In ExecAI Studio the `execai` terminal command takes care of itself.** On start
+  Studio installs its bundled agent into `~/.local/bin` when the system has none,
+  refreshes it when the system copy is older, and leaves a newer one alone. No
+  sudo, `/usr/local/bin` is never touched. Outside Studio nothing happens.
+
+### Fixed
+
+- **«Open in terminal» now launches the same binary the panel uses.** It used to
+  call `execai` from PATH, which in Studio could mean "command not found" while
+  the panel worked fine next to it.
+- When the agent on PATH is newer than the one bundled with Studio, the panel now
+  uses the newer one instead of insisting on its own copy.
+
+## 0.2.6 — 2026-08-16
+
+### Added
+
+- **In ExecAI Studio the chat opens by itself on the very first start** — the way
+  Cursor greets you. Only once: a panel the user closed stays closed. In stock
+  VS Code and Cursor nothing changes.
+
+### Changed
+
+- The extension now activates on startup (`onStartupFinished`) instead of on the
+  first opening of the panel. Activation is a handful of command registrations,
+  so the cost is not noticeable.
+
+## 0.2.5 — 2026-08-16
+
+### Added
+
+- **The agent bundled with ExecAI Studio is found automatically.** The extension now
+  looks for the `execai` binary inside the editor's own resources before falling back
+  to the managed copy and PATH. In stock VS Code nothing changes; in ExecAI Studio
+  the agent works out of the box, with no download on first start.
+
 ## 0.2.4 — 2026-08-15
 
 ### Added

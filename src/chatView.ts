@@ -134,13 +134,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.view?.show?.(true);
         break;
       case 'login_start': {
-        // We open the link ourselves: nobody should have to copy it out of the
-        // chat, and the code stays visible in the panel anyway.
+        // The link opens by itself, but it must also be takeable by hand: over
+        // SSH nothing opens, and the sign-in may happen in a browser on a
+        // different machine. The panel shows the same link with a copy button.
         const uri = e.text || '';
+        const copy = vscode.l10n.t('Copy link');
         void vscode.window.showInformationMessage(
           vscode.l10n.t('Confirm the sign-in: code {0}', e.id ?? ''),
-          vscode.l10n.t('Open in browser'),
-        ).then((p) => { if (p && uri) void vscode.env.openExternal(vscode.Uri.parse(uri)); });
+          vscode.l10n.t('Open in browser'), copy,
+        ).then((p) => {
+          if (p === copy) void vscode.env.clipboard.writeText(uri);
+          else if (p && uri) void vscode.env.openExternal(vscode.Uri.parse(uri));
+        });
         if (uri) void vscode.env.openExternal(vscode.Uri.parse(uri));
         break;
       }
@@ -183,6 +188,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case 'pick_files':
         void this.pickFiles();
         break;
+      case 'copy_text':
+        // The webview cannot rely on navigator.clipboard in every host — the
+        // extension side always can.
+        void vscode.env.clipboard.writeText(m.text || '');
+        break;
       case 'attach_paths':
         void this.attachPaths((m as { paths?: string[] }).paths || []);
         break;
@@ -193,6 +203,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case 'agent_command': {
         const c = m as unknown as { name?: string; value?: string };
+        if (!this.client?.alive) {
+          // A dead agent used to swallow commands in silence while the panel
+          // kept its optimism. Say what is actually wrong instead.
+          if (!vscode.workspace.workspaceFolders?.length) {
+            this.toWebview({
+              type: 'error',
+              text: vscode.l10n.t('Open a project folder — the agent needs a working directory.'),
+            });
+          } else {
+            this.startAgent();
+            this.toWebview({
+              type: 'notice',
+              text: vscode.l10n.t('The agent is starting — repeat the action in a moment.'),
+            });
+          }
+          break;
+        }
         if (c.name === 'connect') { void this.connectFlow(c.value || ''); break; }
         if (c.name === 'set_max_iterations' && !c.value) { void this.maxIterFlow(); break; }
         this.client?.sendCommand(c.name || '', c.value);

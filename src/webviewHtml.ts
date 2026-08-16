@@ -38,7 +38,6 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     mLogout: 'Sign out of ExecAI',
     mLogin: 'Sign in to ExecAI',
     loginNone: 'not signed in',
-    openingBrowser: 'Opening the browser to confirm the sign-in…',
     mNewChat: 'New chat',
     mRestart: 'Restart the agent',
     mTerminal: 'Open execai in a terminal',
@@ -56,8 +55,10 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     thinkingOpen: 'reasoning ▾',
     newChatNotice: 'New chat.',
     chatRestored: 'Chat restored — carry on.',
-    loginConfirm: 'Confirm the sign-in in your browser: ',
+    loginConfirm: 'Confirm the sign-in in a browser',
     loginCode: '  ·  code ',
+    loginCopy: 'copy the link',
+    loginCopied: 'copied ✓',
     signedIn: 'Signed in: ',
     agentExited: 'The agent exited.',
     restartBtn: 'Restart',
@@ -84,7 +85,6 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     mLogout: 'Выйти из ExecAI',
     mLogin: 'Войти в ExecAI',
     loginNone: 'не выполнен',
-    openingBrowser: 'Открываю браузер для подтверждения входа…',
     mNewChat: 'Новый чат',
     mRestart: 'Перезапустить агента',
     mTerminal: 'Открыть execai в терминале',
@@ -102,8 +102,10 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     thinkingOpen: 'размышления ▾',
     newChatNotice: 'Новый чат.',
     chatRestored: 'Чат восстановлен — можно продолжать.',
-    loginConfirm: 'Подтверди вход в браузере: ',
+    loginConfirm: 'Подтверди вход в браузере',
     loginCode: '  ·  код ',
+    loginCopy: 'скопировать ссылку',
+    loginCopied: 'скопировано ✓',
     signedIn: 'Вошли: ',
     agentExited: 'Агент завершился.',
     restartBtn: 'Перезапустить',
@@ -233,6 +235,19 @@ export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lan
   .ask button small { color: var(--vscode-descriptionForeground); }
   .ask.answered { opacity: .55; }
   .ask.answered button { pointer-events: none; }
+  .login-link {
+    display: block; margin: 5px 0; padding: 5px 7px; border-radius: 4px;
+    font-family: var(--vscode-editor-font-family); font-size: 12px;
+    background: var(--vscode-editor-background);
+    user-select: all; word-break: break-all;
+  }
+  .login-copy {
+    padding: 3px 8px; border-radius: 5px; cursor: pointer;
+    color: var(--vscode-foreground);
+    background: var(--vscode-button-secondaryBackground);
+    border: 1px solid var(--vscode-panel-border);
+  }
+  .login-copy:hover { background: var(--vscode-list-hoverBackground); }
   .files { margin: 6px 0; display: flex; flex-wrap: wrap; gap: 4px; }
   .files span {
     cursor: pointer; font-size: 11px; border-radius: 4px; padding: 2px 7px;
@@ -580,8 +595,8 @@ function menuRoot() {
   } else {
     menu.appendChild(mi(T.mLogin, T.loginNone, () => {
       closeMenu();
-      log.appendChild(el('div', 'notice', T.openingBrowser));
-      scroll();
+      // No optimistic notice here: login_start from the agent draws the real
+      // link, and a dead agent gets a real error from the extension side.
       vscode.postMessage({ type: 'agent_command', name: 'login' });
     }, false, 'login'));
   }
@@ -925,11 +940,24 @@ window.addEventListener('message', (ev) => {
       if (menuView === 'root') menuRoot();
       else if (menuView) menuList(menuView);
       break;
-    case 'login_start':
-      log.appendChild(el('div', 'notice',
-        T.loginConfirm + (e.text || '') + T.loginCode + (e.id || '')));
+    case 'login_start': {
+      // The browser opens by itself, but the link must survive on its own:
+      // over SSH or on a headless box nothing opens, and the sign-in may
+      // happen in a browser on another machine entirely.
+      const n = el('div', 'notice');
+      n.appendChild(el('div', undefined, T.loginConfirm + (e.id ? T.loginCode + e.id : '')));
+      n.appendChild(el('code', 'login-link', e.text || ''));
+      const copy = el('button', 'login-copy', T.loginCopy);
+      copy.onclick = () => {
+        vscode.postMessage({ type: 'copy_text', text: e.text || '' });
+        copy.textContent = T.loginCopied;
+        setTimeout(() => { copy.textContent = T.loginCopy; }, 1500);
+      };
+      n.appendChild(copy);
+      log.appendChild(n);
       scroll();
       break;
+    }
     case 'login_done':
       log.appendChild(el('div', 'notice', T.signedIn + (e.text || '')));
       scroll();

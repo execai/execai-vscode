@@ -42,5 +42,11 @@
   "execai {0}+ is required (found {1}) — update it?": "Нужен execai {0}+ (найден {1}) — обновить?",
   "The execai agent was not found. Download it?": "Агент execai не найден. Скачать его?",
   "Download": "Скачать",
-  "Not now": "Не сейчас"
+  "Not now": "Не сейчас",
+  "ExecAI: the agent is updated to {0} in ~/.local/bin.": "ExecAI: агент обновлён до {0} в ~/.local/bin.",
+  "ExecAI: the agent {0} is installed to ~/.local/bin — the `execai` command now works in the terminal.": "ExecAI: агент {0} установлен в ~/.local/bin — команда `execai` теперь работает в терминале.",
+  "ExecAI Studio {0} is out (you are on {1}).": "Вышла ExecAI Studio {0} (у тебя {1}).",
+  "Skip this version": "Пропустить эту версию",
+  "Copy link": "Скопировать ссылку",
+  "The agent is starting — repeat the action in a moment.": "Агент запускается — повтори действие через секунду."
 }

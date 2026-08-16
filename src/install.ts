@@ -16,6 +16,8 @@
 
 import * as vscode from 'vscode';
 import * as path from 'node:path';
+import * as os from 'node:os';
+import { promises as fsp } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { versionAtLeast } from './version';
@@ -49,6 +51,52 @@ function assetName(): { file: string; bin: string } | null {
     default:
       return null;
   }
+}
+
+/**
+ * Path to a binary shipped inside the editor itself. ExecAI Studio bundles the
+ * agent at <install>/resources/execai/, next to appRoot (<install>/resources/app).
+ * In a stock VS Code this path simply does not exist and the probe fails fast.
+ */
+export function bundledPath(): string {
+  const exe = process.platform === 'win32' ? 'execai.exe' : 'execai';
+  return path.join(vscode.env.appRoot, '..', 'execai', exe);
+}
+
+/**
+ * In ExecAI Studio the agent must work in a plain terminal too, not only in
+ * the panel. On start Studio installs its bundled copy into ~/.local/bin when
+ * the system has no agent, and refreshes it when the system one is older; a
+ * newer system agent is left alone. ~/.local/bin on purpose: no sudo, and a
+ * copy in /usr/local/bin stays untouchable. Outside Studio there is no bundled
+ * binary and this is a no-op.
+ */
+export async function ensureSystemAgent(): Promise<void> {
+  if (process.platform === 'win32') return; // Studio ships Linux-only for now
+  const bundledVer = await probeVersion(bundledPath());
+  if (!bundledVer) return; // not running inside Studio
+  const sysVer = await probeVersion('execai');
+  if (sysVer && versionAtLeast(sysVer, bundledVer)) return;
+
+  const dir = path.join(os.homedir(), '.local', 'bin');
+  const target = path.join(dir, 'execai');
+  try {
+    await fsp.mkdir(dir, { recursive: true });
+    // Copy aside and rename: overwriting a binary that is currently running
+    // fails with ETXTBSY, renaming over it does not.
+    await fsp.copyFile(bundledPath(), target + '.new');
+    await fsp.chmod(target + '.new', 0o755);
+    await fsp.rename(target + '.new', target);
+  } catch (e) {
+    // A broken terminal shortcut must not get in the way of the panel.
+    console.warn('execai: could not install the agent to ~/.local/bin:', e);
+    return;
+  }
+  void vscode.window.showInformationMessage(
+    sysVer
+      ? vscode.l10n.t('ExecAI: the agent is updated to {0} in ~/.local/bin.', bundledVer)
+      : vscode.l10n.t('ExecAI: the agent {0} is installed to ~/.local/bin — the `execai` command now works in the terminal.', bundledVer),
+  );
 }
 
 /** Path to the binary the extension manages (it may not exist yet). */
@@ -168,9 +216,10 @@ export async function ensureBinary(ctx: vscode.ExtensionContext): Promise<string
 }
 
 /**
- * resolveBinary picks what to run: the setting → the managed copy
- * (globalStorage) → PATH. It also checks age: an old CLI knows nothing about
- * `execai ide`, and instead of breaking silently the user is offered an update.
+ * resolveBinary picks what to run: the setting → the copy bundled with the
+ * editor (ExecAI Studio) → the managed copy (globalStorage) → PATH. It also
+ * checks age: an old CLI knows nothing about `execai ide`, and instead of
+ * breaking silently the user is offered an update.
  */
 export async function resolveBinary(ctx: vscode.ExtensionContext): Promise<string | null> {
   const cfg = vscode.workspace.getConfiguration('execai');
@@ -178,12 +227,23 @@ export async function resolveBinary(ctx: vscode.ExtensionContext): Promise<strin
   // An explicit setting is law: the user named a path themselves, never override it.
   if (explicit && explicit !== 'execai') return explicit;
 
+  // The bundled copy (ExecAI Studio) and PATH compete on version: whichever
+  // is newer wins, so an agent the user updated by hand is used, not fought.
+  // On a tie the bundled one is taken — it is version-matched to the
+  // extension at build time.
+  const bundled = bundledPath();
+  const bundledVer = await probeVersion(bundled);
+  const pathVer = await probeVersion('execai');
+  const preferPath = !!pathVer && !versionAtLeast(bundledVer, pathVer);
+  for (const c of preferPath
+    ? [{ bin: 'execai', ver: pathVer }, { bin: bundled, ver: bundledVer }]
+    : [{ bin: bundled, ver: bundledVer }, { bin: 'execai', ver: pathVer }]) {
+    if (versionAtLeast(c.ver, MIN_CLI)) return c.bin;
+  }
+
   const managed = managedPath(ctx);
   const managedVer = await probeVersion(managed);
   if (versionAtLeast(managedVer, MIN_CLI)) return managed;
-
-  const pathVer = await probeVersion('execai');
-  if (versionAtLeast(pathVer, MIN_CLI)) return 'execai';
 
   // Something is installed but it is old — say plainly what was found.
   const found = pathVer || managedVer;
