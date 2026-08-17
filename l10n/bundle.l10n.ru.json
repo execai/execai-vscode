@@ -63,5 +63,8 @@
   "Restart now": "Перезапустить сейчас",
   "ExecAI Studio {0} is installed. Restart to use it.": "ExecAI Studio {0} установлена. Перезапусти, чтобы использовать.",
   "ExecAI Studio updated to {0}.": "ExecAI Studio обновлена до {0}.",
-  "The new version is downloaded, verified and installed in place; the current one is kept until the new one has started.": "Новая версия скачивается, проверяется и ставится на место текущей; текущая сохраняется, пока новая не запустится."
+  "The new version is downloaded, verified and installed in place; the current one is kept until the new one has started.": "Новая версия скачивается, проверяется и ставится на место текущей; текущая сохраняется, пока новая не запустится.",
+  "The previous version is kept until the new one has started, so nothing is lost.": "Предыдущая версия сохраняется, пока не запустится новая — ничего не потеряется.",
+  "ExecAI Studio {0} is downloaded. Restart to install it?": "ExecAI Studio {0} скачана. Перезапустить, чтобы установить?",
+  "The editor closes, a small window shows the installation progress, and the new version starts by itself. The previous version is kept until then.": "Редактор закроется, небольшое окно покажет ход установки, и новая версия запустится сама. Предыдущая версия сохраняется до этого момента."
 }

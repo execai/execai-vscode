@@ -115,6 +115,15 @@ async function checkOnce(ctx: vscode.ExtensionContext, current: string, manual =
   // the user wants the answer, not the memory of last week's refusal.
   if (!manual && ctx.globalState.get<string>(DISMISSED_KEY) === latest.version) return;
 
+  // Fetch first, ask later. The download is the slow part and asking about it
+  // buys nothing: the editor keeps working while it runs, and the only choice
+  // that matters — when to restart — is asked once everything is in place.
+  // Turn `execai.studioAutoUpdate` off to be asked before anything is fetched.
+  if (vscode.workspace.getConfiguration('execai').get<boolean>('studioAutoUpdate', true)) {
+    await applyUpdate(ctx, latest.version, { quiet: !manual });
+    return;
+  }
+
   const update = vscode.l10n.t('Update now');
   const later = vscode.l10n.t('Later');
   const skip = vscode.l10n.t('Skip this version');
@@ -200,7 +209,8 @@ function run(cmd: string, args: string[]): Promise<void> {
  * tree is fully in place. Windows cannot replace a running exe, so there the
  * swap happens via a helper script that waits for this process to exit.
  */
-async function applyUpdate(ctx: vscode.ExtensionContext, version: string): Promise<void> {
+async function applyUpdate(ctx: vscode.ExtensionContext, version: string,
+                           opts: { quiet?: boolean } = {}): Promise<void> {
   const L = layout();
   if (!L) {
     void vscode.window.showErrorMessage(vscode.l10n.t('unsupported platform: {0}', `${process.platform}/${process.arch}`));
@@ -213,7 +223,13 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string): Promi
   const staging = L.installDir + '.staging';
   try {
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('ExecAI Studio: updating to {0}', version), cancellable: false },
+      {
+        // An update nobody asked for downloads in the status bar; one the user
+        // asked for reports in a notification.
+        location: opts.quiet ? vscode.ProgressLocation.Window : vscode.ProgressLocation.Notification,
+        title: vscode.l10n.t('ExecAI Studio: updating to {0}', version),
+        cancellable: false,
+      },
       async (p) => {
         const data = await fetchArchive(file, version, (m) => p.report({ message: m }));
         await fsp.rm(staging, { recursive: true, force: true });
@@ -238,22 +254,57 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string): Promi
         const install = L.installDir;
         const old = install + '.old';
         if (L.kind === 'win32') {
-          // Swap after exit: a running exe cannot be replaced. The helper is
-          // started detached and waits for this PID to go away.
-          const helper = path.join(staging, 'swap.cmd');
+          // Swap after exit: a running exe cannot be replaced. A visible
+          // PowerShell window takes over: it waits until every process from
+          // the OLD install (not this extension host — that one dies first)
+          // has exited, swaps the folders with progress on screen, starts the
+          // new build and closes itself. Failures stay on screen with the
+          // reason and the old install intact.
+          const helper = path.join(staging, 'swap.ps1');
+          const exe = path.join(install, 'ExecAI Studio.exe');
+          const ps = (v: string) => v.replace(/'/g, "''");
           const script = [
-            '@echo off',
-            `:wait`,
-            `tasklist /FI "PID eq ${process.pid}" 2>NUL | find "${process.pid}" >NUL && (timeout /t 1 /nobreak >NUL & goto wait)`,
-            `rmdir /s /q "${old}" 2>NUL`,
-            `move "${install}" "${old}"`,
-            `move "${fresh}" "${install}"`,
-            `start "" "${path.join(install, 'ExecAI Studio.exe')}"`,
+            `$ErrorActionPreference = 'Stop'`,
+            `$Host.UI.RawUI.WindowTitle = 'ExecAI Studio — installing update ${version}'`,
+            `$install = '${ps(install)}'; $old = '${ps(old)}'; $fresh = '${ps(fresh)}'; $exe = '${ps(exe)}'`,
+            `Write-Host ''`,
+            `Write-Host '  ExecAI Studio update ${version}' -ForegroundColor Cyan`,
+            `Write-Host '  ------------------------------'`,
+            `Write-Host '  [1/4] waiting for ExecAI Studio to close...' -NoNewline`,
+            `$deadline = (Get-Date).AddMinutes(3)`,
+            `while ((Get-Date) -lt $deadline) {`,
+            `  $running = Get-Process | Where-Object { try { $_.Path -and $_.Path.StartsWith($install, [StringComparison]::OrdinalIgnoreCase) } catch { $false } }`,
+            `  if (-not $running) { break }`,
+            `  Start-Sleep -Milliseconds 500`,
+            `}`,
+            `Write-Host ' done'`,
+            `try {`,
+            `  Write-Host '  [2/4] moving the current version aside...' -NoNewline`,
+            `  if (Test-Path $old) { Remove-Item $old -Recurse -Force }`,
+            `  Move-Item $install $old`,
+            `  Write-Host ' done'`,
+            `  Write-Host '  [3/4] putting the new version in place...' -NoNewline`,
+            `  Move-Item $fresh $install`,
+            `  Write-Host ' done'`,
+            `  Write-Host '  [4/4] starting ExecAI Studio ${version}...'`,
+            `  Start-Process -FilePath $exe -WorkingDirectory $install`,
+            `  Start-Sleep -Seconds 2`,
+            `} catch {`,
+            `  Write-Host ''`,
+            `  Write-Host "  update failed: $($_.Exception.Message)" -ForegroundColor Red`,
+            `  if (-not (Test-Path $install) -and (Test-Path $old)) { Move-Item $old $install; Write-Host '  the previous version was restored.' }`,
+            `  Write-Host '  press Enter to close'`,
+            `  [void](Read-Host)`,
+            `}`,
           ].join('\r\n');
-          await fsp.writeFile(helper, script);
+          await fsp.writeFile(helper, script, 'utf8');
           await ctx.globalState.update(PENDING_KEY, version);
           const { spawn } = await import('node:child_process');
-          spawn('cmd.exe', ['/c', helper], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+          // A separate console (not hidden) — the user must see that an
+          // installation is running while the editor window is gone.
+          spawn('powershell.exe',
+            ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper],
+            { detached: true, stdio: 'ignore', windowsHide: false }).unref();
           return;
         }
         // linux / darwin: two renames on one filesystem — atomic, and the old
@@ -271,13 +322,27 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string): Promi
     return;
   }
   if (L.kind === 'win32') {
-    void vscode.window.showInformationMessage(
-      vscode.l10n.t('ExecAI Studio {0} is ready — it will be installed and started when you close this window.', version));
+    const restart = vscode.l10n.t('Restart now');
+    const later = vscode.l10n.t('Later');
+    const pick = await vscode.window.showInformationMessage(
+      vscode.l10n.t('ExecAI Studio {0} is downloaded. Restart to install it?', version),
+      { modal: true, detail: vscode.l10n.t('The editor closes, a small window shows the installation progress, and the new version starts by itself. The previous version is kept until then.') },
+      restart, later);
+    trace(`win32 restart offer answered: ${pick ?? 'dismissed'}`);
+    // The helper is already waiting for the editor to exit; «Later» just
+    // leaves it waiting until the window is closed by hand.
+    if (pick === restart) await vscode.commands.executeCommand('workbench.action.quit');
     return;
   }
   const restart = vscode.l10n.t('Restart now');
+  const later = vscode.l10n.t('Later');
+  // The only question worth asking: the bits are already on disk, and a
+  // running editor cannot swap itself out from under an open file.
   const pick = await vscode.window.showInformationMessage(
-    vscode.l10n.t('ExecAI Studio {0} is installed. Restart to use it.', version), restart);
+    vscode.l10n.t('ExecAI Studio {0} is installed. Restart to use it.', version),
+    { modal: true, detail: vscode.l10n.t('The previous version is kept until the new one has started, so nothing is lost.') },
+    restart, later);
+  trace(`restart offer answered: ${pick ?? 'dismissed'}`);
   if (pick === restart) {
     // The launcher path is the same after the swap; a fresh process comes up
     // from the new tree while this one quits.

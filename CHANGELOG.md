@@ -3,6 +3,32 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.19 — 2026-08-18
+
+### Fixed
+
+- **Windows: the update installer is visible and waits for the right process.**
+  After «Restart now» a small console shows the four steps — waiting for the
+  editor to close, moving the current version aside, putting the new one in
+  place, starting it — instead of the editor vanishing for a few seconds. The
+  helper now waits for every process of the old install to exit (it used to
+  watch the extension host, which dies before the main window releases its
+  files, so the swap could fail silently); on failure it says why and restores
+  the previous version.
+
+## 0.2.18 — 2026-08-18
+
+### Changed
+
+- **A new Studio version is downloaded first and only then asks — about the
+  restart.** Nothing opens a browser and no archive lands in Downloads: the
+  editor fetches, verifies and installs the update itself (progress in the
+  status bar for a background check, in a notification for one you asked for),
+  then offers «Restart now». `execai.studioAutoUpdate: false` restores the old
+  «ask before downloading» behaviour.
+- The core Help → «Check for Updates» → «Download» now lands in the same flow
+  instead of opening a page: the update feed hands the editor our own URI.
+
 ## 0.2.17 — 2026-08-17
 
 ### Added
