@@ -3,6 +3,14 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.16 — 2026-08-17
+
+### Changed
+
+- **Update channels: GitHub first, the Yandex mirror second** — for the version
+  check, the archive and SHA256SUMS alike. Both places always carry the same
+  release; the order only decides who answers first.
+
 ## 0.2.15 — 2026-08-17
 
 ### Changed

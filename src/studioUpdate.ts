@@ -2,8 +2,8 @@
 //
 // Why this lives in the extension. Studio is a repack of a VSCodium release,
 // and the built-in updater knows exactly one URL baked into product.json. We
-// want two independent places — the Yandex mirror (our production bucket,
-// always reachable in Russia) and GitHub (reachable everywhere else) — so the
+// want two independent places — GitHub first, the Yandex mirror (our
+// production bucket, always reachable in Russia) as the fallback — so the
 // extension does the checking itself, the same way the agent installer already
 // falls back between the two. Outside Studio there is no `studioVersion` in
 // product.json and every call here is a no-op.
@@ -62,24 +62,8 @@ async function fetchJson(url: string): Promise<unknown> {
   return r.json();
 }
 
-/** The newest published version, from the first channel that answers. */
+/** The newest published version — GitHub first, the Yandex mirror second. */
 async function fetchLatest(): Promise<{ version: string; url: string } | null> {
-  try {
-    const j = (await fetchJson(MIRROR)) as {
-      version?: unknown;
-      url?: unknown;
-      urls?: Record<string, unknown>;
-    };
-    if (typeof j.version === 'string') {
-      // Per-platform download when latest.json carries one; the flat `url`
-      // is the pre-multiplatform fallback.
-      const mine = j.urls?.[`${process.platform}-${process.arch}`];
-      const url = typeof mine === 'string' ? mine : typeof j.url === 'string' ? j.url : GITHUB_PAGE;
-      return { version: j.version, url };
-    }
-  } catch {
-    /* mirror unreachable — try GitHub */
-  }
   try {
     const j = (await fetchJson(GITHUB_API)) as { tag_name?: unknown; html_url?: unknown };
     if (typeof j.tag_name === 'string') {
@@ -87,6 +71,20 @@ async function fetchLatest(): Promise<{ version: string; url: string } | null> {
         version: j.tag_name.replace(/^v/, ''),
         url: typeof j.html_url === 'string' ? j.html_url : GITHUB_PAGE,
       };
+    }
+  } catch {
+    /* GitHub unreachable (or rate-limited) — try the mirror */
+  }
+  try {
+    const j = (await fetchJson(MIRROR)) as {
+      version?: unknown;
+      url?: unknown;
+      urls?: Record<string, unknown>;
+    };
+    if (typeof j.version === 'string') {
+      const mine = j.urls?.[`${process.platform}-${process.arch}`];
+      const url = typeof mine === 'string' ? mine : typeof j.url === 'string' ? j.url : GITHUB_PAGE;
+      return { version: j.version, url };
     }
   } catch {
     /* offline — stay quiet, we will ask again later */
@@ -162,11 +160,11 @@ async function download(url: string): Promise<Uint8Array> {
   return new Uint8Array(await r.arrayBuffer());
 }
 
-/** Fetches the archive, mirror first, GitHub second; verifies SHA-256 when SHA256SUMS is reachable. */
+/** Fetches the archive, GitHub first, mirror second; verifies SHA-256 against SHA256SUMS. */
 async function fetchArchive(file: string, version: string, progress: (m: string) => void): Promise<Uint8Array> {
   const errors: string[] = [];
   let data: Uint8Array | null = null;
-  for (const url of [`${MIRROR_BASE}/${file}`, `${GITHUB_DL}/v${version}/${file}`]) {
+  for (const url of [`${GITHUB_DL}/v${version}/${file}`, `${MIRROR_BASE}/${file}`]) {
     try {
       progress(vscode.l10n.t('downloading {0}', file));
       data = await download(url);
@@ -178,7 +176,7 @@ async function fetchArchive(file: string, version: string, progress: (m: string)
   if (!data) throw new Error(errors.join(' · '));
   progress(vscode.l10n.t('verifying checksum'));
   let sums = '';
-  for (const url of [`${MIRROR_BASE}/SHA256SUMS`, `${GITHUB_DL}/v${version}/SHA256SUMS`]) {
+  for (const url of [`${GITHUB_DL}/v${version}/SHA256SUMS`, `${MIRROR_BASE}/SHA256SUMS`]) {
     try { sums = new TextDecoder().decode(await download(url)); break; } catch { /* next */ }
   }
   if (!sums) throw new Error(vscode.l10n.t('could not fetch SHA256SUMS — update cancelled'));
