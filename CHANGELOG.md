@@ -3,6 +3,17 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.17 — 2026-08-17
+
+### Added
+
+- **OS integration is checked on every Studio start**: «Open with ExecAI
+  Studio» in the Explorer context menu (folders, folder background, files) on
+  Windows, «Open With» for folders in Linux file managers, Launch Services on
+  macOS, plus the `execai-studio://` scheme. Per-user, no admin rights; the
+  install scripts set it up first, the editor keeps it correct after
+  self-updates and moves. Outside Studio nothing happens.
+
 ## 0.2.16 — 2026-08-17
 
 ### Changed

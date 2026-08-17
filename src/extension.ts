@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { ChatViewProvider } from './chatView';
 import { ensureSystemAgent, resolveBinary } from './install';
 import { checkStudioUpdatesNow, finishPendingUpdate, studioVersion, watchStudioUpdates } from './studioUpdate';
+import { ensureShellIntegration } from './studioShell';
 
 export function activate(ctx: vscode.ExtensionContext): void {
   const chat = new ChatViewProvider(ctx);
@@ -61,6 +62,10 @@ export function activate(ctx: vscode.ExtensionContext): void {
   // Studio updates itself through the extension: finish a swap left from the
   // previous run, then watch both release channels. No-op outside Studio.
   void finishPendingUpdate(ctx).then(() => watchStudioUpdates(ctx));
+
+  // «Open with ExecAI Studio» in the file manager, menu entry, URL scheme —
+  // re-checked on every start so a self-update never leaves them stale.
+  void ensureShellIntegration();
 }
 
 export function deactivate(): void {
