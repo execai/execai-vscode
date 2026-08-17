@@ -41,6 +41,7 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     mNewChat: 'New chat',
     mRestart: 'Restart the agent',
     mTerminal: 'Open execai in a terminal',
+    mCheckUpdates: 'Check for Studio updates',
     back: '← back',
     listEmpty: 'the list has not arrived yet — reopen the menu',
     histHead: 'History of this project',
@@ -88,6 +89,7 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     mNewChat: 'Новый чат',
     mRestart: 'Перезапустить агента',
     mTerminal: 'Открыть execai в терминале',
+    mCheckUpdates: 'Проверить обновления Studio',
     back: '← назад',
     listEmpty: 'список ещё не приехал — открой меню заново',
     histHead: 'История этого проекта',
@@ -448,6 +450,7 @@ let curAssistant = null;  // current answer block
 let curThinking = null;   // current reasoning block
 let tools = {};           // id → card elements
 let attached = [];        // [{path, label, thumb?}] — "+", drag&drop, paste
+let isStudio = false;     // set by the extension inside ExecAI Studio
 
 function renderChips() {
   chipsBox.innerHTML = '';
@@ -613,6 +616,10 @@ function menuRoot() {
   menu.appendChild(mi(T.mNewChat, '', () => { closeMenu(); vscode.postMessage({ type: 'new_chat_ui' }); }, false, 'newchat'));
   menu.appendChild(mi(T.mRestart, '', () => { closeMenu(); vscode.postMessage({ type: 'restart' }); }, false, 'restart'));
   menu.appendChild(mi(T.mTerminal, '', () => { closeMenu(); vscode.postMessage({ type: 'open_terminal' }); }, false, 'terminal'));
+  if (isStudio) {
+    menu.appendChild(el('div', 'sep'));
+    menu.appendChild(mi(T.mCheckUpdates, '', () => { closeMenu(); vscode.postMessage({ type: 'check_updates' }); }, false, 'updates'));
+  }
   menu.classList.add('open');
 }
 function menuList(kind) {
@@ -897,6 +904,9 @@ window.addEventListener('message', (ev) => {
       for (const t of Object.values(tools)) t.box.classList.remove('run');
       if (curThinking) curThinking.classList.remove('live');
       curAssistant = null; curThinking = null;
+      break;
+    case 'studio':
+      isStudio = true;
       break;
     case 'files_attached':
       addAttachments(e.items || (e.paths || []).map(p => ({ path: p, label: p })));

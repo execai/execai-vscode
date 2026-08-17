@@ -4,7 +4,7 @@
 import * as vscode from 'vscode';
 import { ChatViewProvider } from './chatView';
 import { ensureSystemAgent, resolveBinary } from './install';
-import { watchStudioUpdates } from './studioUpdate';
+import { checkStudioUpdatesNow, finishPendingUpdate, studioVersion, watchStudioUpdates } from './studioUpdate';
 
 export function activate(ctx: vscode.ExtensionContext): void {
   const chat = new ChatViewProvider(ctx);
@@ -18,6 +18,18 @@ export function activate(ctx: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('execai.restart', () => chat.restart()),
     vscode.commands.registerCommand('execai.sendSelection', () => chat.sendSelection()),
     vscode.commands.registerCommand('execai.installAgent', () => chat.installAgent()),
+    vscode.commands.registerCommand('execai.checkUpdates', () => checkStudioUpdatesNow(ctx)),
+    // Inside Studio the native Help → «Download Update» opens product.json's
+    // downloadUrl, which the build points at execai-studio://update — the
+    // editor hands that URI back here, and the extension installs the update
+    // itself instead of sending the user to a web page.
+    vscode.window.registerUriHandler({
+      handleUri: (uri) => {
+        // eslint-disable-next-line no-console
+        console.log('execai: uri', uri.toString());
+        if (uri.path.replace(/^\/+/, '') === 'update' && studioVersion()) checkStudioUpdatesNow(ctx);
+      },
+    }),
     vscode.commands.registerCommand('execai.attachFile',
       (uri?: vscode.Uri, uris?: vscode.Uri[]) => chat.attachFromCommand(uri, uris)),
     vscode.commands.registerCommand('execai.openTerminal', async () => {
@@ -46,9 +58,9 @@ export function activate(ctx: vscode.ExtensionContext): void {
   // older, leave a newer one alone. No-op outside Studio.
   void ensureSystemAgent();
 
-  // Studio has no built-in updater (its updateUrl is stripped at build time),
-  // so the extension watches both release channels instead. No-op outside Studio.
-  watchStudioUpdates(ctx);
+  // Studio updates itself through the extension: finish a swap left from the
+  // previous run, then watch both release channels. No-op outside Studio.
+  void finishPendingUpdate(ctx).then(() => watchStudioUpdates(ctx));
 }
 
 export function deactivate(): void {

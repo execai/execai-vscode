@@ -50,5 +50,18 @@
   "Copy link": "Скопировать ссылку",
   "The agent is starting — repeat the action in a moment.": "Агент запускается — повтори действие через секунду.",
   "{0} (active file)": "{0} (активный файл)",
-  "{0} + selection (active file)": "{0} + выделение (активный файл)"
+  "{0} + selection (active file)": "{0} + выделение (активный файл)",
+  "Update now": "Обновить сейчас",
+  "Later": "Позже",
+  "ExecAI Studio {0} is out (you are on {1}). Update and restart?": "Вышла ExecAI Studio {0} (у тебя {1}). Обновить и перезапустить?",
+  "downloading {0}": "скачиваю {0}",
+  "could not fetch SHA256SUMS — update cancelled": "не удалось получить SHA256SUMS — обновление отменено",
+  "installing": "устанавливаю",
+  "ExecAI Studio: updating to {0}": "ExecAI Studio: обновление до {0}",
+  "ExecAI Studio update failed: {0}": "Обновление ExecAI Studio не удалось: {0}",
+  "ExecAI Studio {0} is ready — it will be installed and started when you close this window.": "ExecAI Studio {0} готова — установится и запустится, когда закроешь это окно.",
+  "Restart now": "Перезапустить сейчас",
+  "ExecAI Studio {0} is installed. Restart to use it.": "ExecAI Studio {0} установлена. Перезапусти, чтобы использовать.",
+  "ExecAI Studio updated to {0}.": "ExecAI Studio обновлена до {0}.",
+  "The new version is downloaded, verified and installed in place; the current one is kept until the new one has started.": "Новая версия скачивается, проверяется и ставится на место текущей; текущая сохраняется, пока новая не запустится."
 }

@@ -3,6 +3,39 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.15 — 2026-08-17
+
+### Changed
+
+- **The Studio update offer is a modal dialog**, not a toast: a toast was lost
+  among the start-up notifications and the offer went unseen.
+- **«Check for Studio updates»** in the panel's `>_` menu and in the command
+  palette (Studio only).
+- The editor's own Help → «Download Update» now hands over to the extension via
+  `execai-studio://execai.execai/update`, so that path installs in place too
+  instead of opening a web page.
+
+## 0.2.14 — 2026-08-17
+
+### Fixed
+
+- **Studio self-update: the swap is two renames, not a copy.** The archive is
+  unpacked next to the installation (same filesystem) and renamed into place;
+  the cross-filesystem copy of the first attempt could stop halfway with an
+  «Invalid package … node_modules.asar».
+
+## 0.2.13 — 2026-08-17
+
+### Added
+
+- **ExecAI Studio updates itself.** «Update now» downloads the archive for the
+  current platform (mirror first, GitHub second), verifies SHA-256, unpacks it
+  next to the installation, swaps the two and offers a restart. The previous
+  install stays as `<install>.old` until the new one has started once. On
+  Windows the swap runs after the window closes (a running exe cannot be
+  replaced). Always with consent — nothing is replaced silently. Outside Studio
+  nothing changes.
+
 ## 0.2.12 — 2026-08-17
 
 ### Changed

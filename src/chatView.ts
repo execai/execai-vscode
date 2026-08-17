@@ -13,6 +13,7 @@ import * as path from 'node:path';
 import { AgentClient, AgentEvent, NamedItem, PROTOCOL } from './protocol';
 import { resolveBinary, ensureBinary, MIN_CLI } from './install';
 import { chatHtml } from './webviewHtml';
+import { studioVersion } from './studioUpdate';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = 'execai.chat';
@@ -37,6 +38,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     view.webview.html = chatHtml(view.webview, this.ctx.extensionUri, vscode.env.language);
 
     view.webview.onDidReceiveMessage((m) => this.fromWebview(m));
+    // Inside ExecAI Studio the panel menu gains «Check for Studio updates».
+    if (studioVersion()) this.toWebview({ type: 'studio' });
     // Queued events are replayed on the ui_ready signal: the webview script may
     // not be listening yet, and early events (ready, notice) would be lost.
     if (!this.client) this.startAgent();
@@ -241,6 +244,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case 'open_terminal':
         void vscode.commands.executeCommand('execai.openTerminal');
+        break;
+      case 'check_updates':
+        void vscode.commands.executeCommand('execai.checkUpdates');
         break;
       case 'answer':
         this.client?.sendAnswer(m.id || '', m.value || '');
