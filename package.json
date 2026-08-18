@@ -2,7 +2,7 @@
   "name": "execai",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "publisher": "execai",
   "license": "BUSL-1.1",
   "icon": "media/icon.png",
@@ -167,11 +167,6 @@
           "type": "boolean",
           "default": true,
           "description": "Continue the last chat of this project when the panel opens. Turn off to start from a clean slate every time."
-        },
-        "execai.studioAutoUpdate": {
-          "type": "boolean",
-          "default": true,
-          "description": "ExecAI Studio: download a new version as soon as it appears and then offer a restart. Turn off to be asked before anything is downloaded."
         }
       }
     }

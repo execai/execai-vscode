@@ -3,6 +3,20 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.23 — 2026-08-18
+
+### Changed
+
+- **Studio updates run in their own window, outside the editor.** «Update and
+  restart» closes the editor and starts the updater that ships with Studio
+  (`resources/execai/updater.ps1` / `updater.sh`): it waits for the editor to
+  close, downloads with a percentage (GitHub first, mirror second), verifies
+  SHA-256, unpacks with a percentage, swaps the folders (retrying while
+  Windows still holds files) and starts the new build; on failure it says why
+  and puts the previous version back. The editor itself no longer downloads or
+  unpacks anything — that is what kept failing on Windows, and a process
+  started from the extension host died with it on quit.
+
 ## 0.2.22 — 2026-08-18
 
 ### Fixed
