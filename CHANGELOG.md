@@ -3,6 +3,16 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.22 — 2026-08-18
+
+### Fixed
+
+- **Windows: leftovers of an earlier update attempt no longer block the next
+  one.** Removing a stale `.staging` folder that Windows still holds locked
+  used to fail the whole update before anything was downloaded («EBUSY …
+  node_modules.asar»); now a fresh staging folder is used and the installer
+  sweeps the old ones when it can.
+
 ## 0.2.21 — 2026-08-18
 
 ### Fixed

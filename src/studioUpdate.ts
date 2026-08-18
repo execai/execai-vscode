@@ -235,7 +235,7 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string,
   // Stage NEXT TO the installation, not in /tmp: the swap must be a rename on
   // the same filesystem (atomic, instant, no 30k-file copy that can fail
   // halfway — a cross-fs copy did exactly that on the first try).
-  const staging = L.installDir + '.staging';
+  let staging = L.installDir + '.staging';
   try {
     await vscode.window.withProgress(
       {
@@ -247,7 +247,13 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string,
       },
       async (p) => {
         const data = await fetchArchive(file, version, (m) => p.report({ message: m }));
-        await fsp.rm(staging, { recursive: true, force: true });
+        // Leftovers of an earlier attempt may still be locked (Windows holds
+        // freshly unpacked files for a while); removing them must never block
+        // this attempt — best effort, and on failure a fresh sibling dir is
+        // used instead. The installer clears whatever it can at the end.
+        await fsp.rm(staging, { recursive: true, force: true }).catch(async () => {
+          staging = staging + '-' + Date.now();
+        });
         await fsp.mkdir(staging, { recursive: true });
         const archive = path.join(staging, file);
         await fsp.writeFile(archive, data);
@@ -410,6 +416,7 @@ try {
   Start-Process -FilePath $exe -WorkingDirectory $install
   Done
   Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
+  Get-ChildItem (Split-Path $install) -Directory -Filter ((Split-Path $install -Leaf) + '.staging*') -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 2
 } catch {
   Write-Host ''
@@ -440,9 +447,16 @@ export async function finishPendingUpdate(ctx: vscode.ExtensionContext): Promise
     // the staged tree is gone with the failed run, so just forget and let the
     // regular check offer the update afresh.
     if (L.kind === 'win32') {
-      const staging = L.installDir + '.staging';
-      const ok = await fsp.stat(path.join(staging, 'install.ps1')).then(() => true, () => false);
-      if (ok) {
+      // The staged tree may live in .staging or a .staging-<ts> sibling.
+      const parent = path.dirname(L.installDir), leaf = path.basename(L.installDir);
+      const cands = (await fsp.readdir(parent).catch(() => [] as string[]))
+        .filter((n) => n.startsWith(leaf + '.staging')).sort().reverse()
+        .map((n) => path.join(parent, n));
+      let staging = '';
+      for (const c of cands) {
+        if (await fsp.stat(path.join(c, 'install.ps1')).then(() => true, () => false)) { staging = c; break; }
+      }
+      if (staging) {
         trace(`pending ${pending} still staged — offering restart again`);
         const restart = vscode.l10n.t('Restart now');
         const pick = await vscode.window.showInformationMessage(
