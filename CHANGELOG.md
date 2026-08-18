@@ -3,6 +3,27 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.21 — 2026-08-18
+
+### Fixed
+
+- **Windows: the update no longer fails with «EBUSY … node_modules.asar».** The
+  editor now only downloads and verifies the archive; unpacking, the folder
+  swap and the start of the new build all happen in the visible installer
+  window after the editor has quit — Defender and indexers grab freshly
+  unpacked files, and any move from inside the editor hit EBUSY. The
+  installer retries busy files for up to 90 s, shows a percentage while
+  unpacking, and puts the previous version back on any failure. A staged
+  update that was postponed with «Later» is offered again on the next start
+  without downloading twice.
+
+## 0.2.20 — 2026-08-18
+
+### Changed
+
+- **Studio update download shows a percentage** (status bar for background
+  updates, notification for manual ones) instead of a bare «downloading».
+
 ## 0.2.19 — 2026-08-18
 
 ### Fixed

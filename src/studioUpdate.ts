@@ -163,10 +163,25 @@ function layout(): { file: (v: string) => string; installDir: string; kind: 'lin
   }
 }
 
-async function download(url: string): Promise<Uint8Array> {
+/** Streams a download; reports 0–100 when the server says how big it is. */
+async function download(url: string, onPercent?: (p: number) => void): Promise<Uint8Array> {
   const r = await fetch(url, { redirect: 'follow' });
   if (!r.ok) throw new Error(`HTTP ${r.status} — ${url}`);
-  return new Uint8Array(await r.arrayBuffer());
+  const total = Number(r.headers.get('content-length') || 0);
+  if (!r.body || !total || !onPercent) return new Uint8Array(await r.arrayBuffer());
+  const out = new Uint8Array(total);
+  const reader = r.body.getReader();
+  let got = 0, last = -1;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (got + value.length > out.length) throw new Error('response longer than content-length');
+    out.set(value, got);
+    got += value.length;
+    const pct = Math.floor((got * 100) / total);
+    if (pct !== last) { onPercent(pct); last = pct; }
+  }
+  return got === total ? out : out.slice(0, got);
 }
 
 /** Fetches the archive, GitHub first, mirror second; verifies SHA-256 against SHA256SUMS. */
@@ -176,7 +191,7 @@ async function fetchArchive(file: string, version: string, progress: (m: string)
   for (const url of [`${GITHUB_DL}/v${version}/${file}`, `${MIRROR_BASE}/${file}`]) {
     try {
       progress(vscode.l10n.t('downloading {0}', file));
-      data = await download(url);
+      data = await download(url, (p) => progress(vscode.l10n.t('downloading {0} — {1}%', file, String(p))));
       break;
     } catch (e) {
       errors.push(String(e));
@@ -236,6 +251,15 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string,
         await fsp.mkdir(staging, { recursive: true });
         const archive = path.join(staging, file);
         await fsp.writeFile(archive, data);
+        if (L.kind === 'win32') {
+          // Windows: nothing more happens inside the editor. Unpacking here
+          // makes Defender/indexers grab the fresh files, and every later
+          // move/rmdir hits EBUSY. The visible installer does unpack + swap
+          // once the editor is gone.
+          await writeWindowsInstaller(staging, archive, L.installDir, version);
+          await ctx.globalState.update(PENDING_KEY, version);
+          return;
+        }
         p.report({ message: vscode.l10n.t('unpacking') });
         await run('tar', ['-xf', archive, '-C', staging]);
         await fsp.rm(archive, { force: true });
@@ -253,60 +277,6 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string,
         p.report({ message: vscode.l10n.t('installing') });
         const install = L.installDir;
         const old = install + '.old';
-        if (L.kind === 'win32') {
-          // Swap after exit: a running exe cannot be replaced. A visible
-          // PowerShell window takes over: it waits until every process from
-          // the OLD install (not this extension host — that one dies first)
-          // has exited, swaps the folders with progress on screen, starts the
-          // new build and closes itself. Failures stay on screen with the
-          // reason and the old install intact.
-          const helper = path.join(staging, 'swap.ps1');
-          const exe = path.join(install, 'ExecAI Studio.exe');
-          const ps = (v: string) => v.replace(/'/g, "''");
-          const script = [
-            `$ErrorActionPreference = 'Stop'`,
-            `$Host.UI.RawUI.WindowTitle = 'ExecAI Studio — installing update ${version}'`,
-            `$install = '${ps(install)}'; $old = '${ps(old)}'; $fresh = '${ps(fresh)}'; $exe = '${ps(exe)}'`,
-            `Write-Host ''`,
-            `Write-Host '  ExecAI Studio update ${version}' -ForegroundColor Cyan`,
-            `Write-Host '  ------------------------------'`,
-            `Write-Host '  [1/4] waiting for ExecAI Studio to close...' -NoNewline`,
-            `$deadline = (Get-Date).AddMinutes(3)`,
-            `while ((Get-Date) -lt $deadline) {`,
-            `  $running = Get-Process | Where-Object { try { $_.Path -and $_.Path.StartsWith($install, [StringComparison]::OrdinalIgnoreCase) } catch { $false } }`,
-            `  if (-not $running) { break }`,
-            `  Start-Sleep -Milliseconds 500`,
-            `}`,
-            `Write-Host ' done'`,
-            `try {`,
-            `  Write-Host '  [2/4] moving the current version aside...' -NoNewline`,
-            `  if (Test-Path $old) { Remove-Item $old -Recurse -Force }`,
-            `  Move-Item $install $old`,
-            `  Write-Host ' done'`,
-            `  Write-Host '  [3/4] putting the new version in place...' -NoNewline`,
-            `  Move-Item $fresh $install`,
-            `  Write-Host ' done'`,
-            `  Write-Host '  [4/4] starting ExecAI Studio ${version}...'`,
-            `  Start-Process -FilePath $exe -WorkingDirectory $install`,
-            `  Start-Sleep -Seconds 2`,
-            `} catch {`,
-            `  Write-Host ''`,
-            `  Write-Host "  update failed: $($_.Exception.Message)" -ForegroundColor Red`,
-            `  if (-not (Test-Path $install) -and (Test-Path $old)) { Move-Item $old $install; Write-Host '  the previous version was restored.' }`,
-            `  Write-Host '  press Enter to close'`,
-            `  [void](Read-Host)`,
-            `}`,
-          ].join('\r\n');
-          await fsp.writeFile(helper, script, 'utf8');
-          await ctx.globalState.update(PENDING_KEY, version);
-          const { spawn } = await import('node:child_process');
-          // A separate console (not hidden) — the user must see that an
-          // installation is running while the editor window is gone.
-          spawn('powershell.exe',
-            ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper],
-            { detached: true, stdio: 'ignore', windowsHide: false }).unref();
-          return;
-        }
         // linux / darwin: two renames on one filesystem — atomic, and the old
         // tree is never gone before the new one is in place.
         await fsp.rm(old, { recursive: true, force: true });
@@ -317,6 +287,7 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string,
       });
   } catch (e) {
     trace(`apply failed: ${String(e instanceof Error ? e.stack || e.message : e)}`);
+    // Best-effort cleanup; its own failure must not mask the real error.
     await fsp.rm(staging, { recursive: true, force: true }).catch(() => undefined);
     void vscode.window.showErrorMessage(vscode.l10n.t('ExecAI Studio update failed: {0}', String(e instanceof Error ? e.message : e)));
     return;
@@ -329,9 +300,15 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string,
       { modal: true, detail: vscode.l10n.t('The editor closes, a small window shows the installation progress, and the new version starts by itself. The previous version is kept until then.') },
       restart, later);
     trace(`win32 restart offer answered: ${pick ?? 'dismissed'}`);
-    // The helper is already waiting for the editor to exit; «Later» just
-    // leaves it waiting until the window is closed by hand.
-    if (pick === restart) await vscode.commands.executeCommand('workbench.action.quit');
+    if (pick !== restart) return; // the archive stays staged; the next start offers again
+    const { spawn } = await import('node:child_process');
+    // Visible console: the user must see the installation while the editor
+    // window is gone. Started right before quitting so it does not sit there
+    // while «Later» is chosen.
+    spawn('powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(staging, 'install.ps1')],
+      { detached: true, stdio: 'ignore', windowsHide: false }).unref();
+    await vscode.commands.executeCommand('workbench.action.quit');
     return;
   }
   const restart = vscode.l10n.t('Restart now');
@@ -356,14 +333,136 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string,
   }
 }
 
+/**
+ * Writes the Windows installer next to the downloaded archive. It runs in its
+ * own visible console after the editor has quit: waits for every process from
+ * the old install to exit, unpacks the zip with a percentage, swaps the folders
+ * (with retries — Defender holds fresh files for a few seconds), starts the new
+ * build, and on any failure explains why and puts the previous version back.
+ */
+async function writeWindowsInstaller(staging: string, archive: string, install: string, version: string): Promise<void> {
+  const ps = (v: string) => v.replace(/'/g, "''");
+  const exe = path.join(install, 'ExecAI Studio.exe');
+  const script = `
+$ErrorActionPreference = 'Stop'
+$Host.UI.RawUI.WindowTitle = 'ExecAI Studio - installing update ${version}'
+$staging = '${ps(staging)}'; $archive = '${ps(archive)}'; $install = '${ps(install)}'; $exe = '${ps(exe)}'
+$old = "$install.old"; $unpack = Join-Path $staging 'unpacked'
+function Step($n, $t) { Write-Host ("  [{0}/5] {1}" -f $n, $t) -NoNewline }
+function Done { Write-Host ' done' -ForegroundColor Green }
+function Retry($what, $act) {
+  # Defender / indexers hold freshly written files for a moment: try for a while.
+  $deadline = (Get-Date).AddSeconds(90); $n = 0
+  while ($true) {
+    try { & $act; return } catch {
+      $n++
+      if ((Get-Date) -gt $deadline) { throw "$what : $($_.Exception.Message)" }
+      if ($n -eq 1) { Write-Host '' ; Write-Host "        (files still in use, retrying...)" -ForegroundColor DarkGray }
+      Start-Sleep -Seconds 2
+    }
+  }
+}
+Write-Host ''
+Write-Host "  ExecAI Studio update ${version}" -ForegroundColor Cyan
+Write-Host '  ------------------------------'
+try {
+  Step 1 'waiting for ExecAI Studio to close...'
+  $deadline = (Get-Date).AddMinutes(3)
+  while ((Get-Date) -lt $deadline) {
+    $running = Get-Process | Where-Object { try { $_.Path -and $_.Path.StartsWith($install, [StringComparison]::OrdinalIgnoreCase) } catch { $false } }
+    if (-not $running) { break }
+    Start-Sleep -Milliseconds 500
+  }
+  Done
+
+  Step 2 'unpacking...'
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  if (Test-Path $unpack) { Remove-Item $unpack -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $unpack | Out-Null
+  $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
+  try {
+    $entries = $zip.Entries; $total = $entries.Count; $i = 0; $last = -1
+    foreach ($e in $entries) {
+      $target = Join-Path $unpack $e.FullName
+      if ($e.FullName.EndsWith('/')) { New-Item -ItemType Directory -Force -Path $target | Out-Null }
+      else {
+        $dir = Split-Path $target
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $target, $true)
+      }
+      $i++; $pct = [int](100 * $i / $total)
+      if ($pct -ne $last) { Write-Host ("\`r  [2/5] unpacking... {0,3}%" -f $pct) -NoNewline; $last = $pct }
+    }
+  } finally { $zip.Dispose() }
+  Done
+  $fresh = (Get-ChildItem $unpack -Directory | Select-Object -First 1).FullName
+  if (-not $fresh) { throw 'the archive is empty' }
+
+  Step 3 'moving the current version aside...'
+  Retry 'could not move the current version aside' { if (Test-Path $old) { Remove-Item $old -Recurse -Force }; Move-Item $install $old }
+  Done
+
+  Step 4 'putting the new version in place...'
+  Retry 'could not put the new version in place' { Move-Item $fresh $install }
+  Done
+
+  Step 5 "starting ExecAI Studio ${version}..."
+  Start-Process -FilePath $exe -WorkingDirectory $install
+  Done
+  Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 2
+} catch {
+  Write-Host ''
+  Write-Host "  update failed: $($_.Exception.Message)" -ForegroundColor Red
+  if (-not (Test-Path $install) -and (Test-Path $old)) {
+    Move-Item $old $install
+    Write-Host '  the previous version was restored.' -ForegroundColor Yellow
+  }
+  Write-Host ''
+  Write-Host '  press Enter to close'
+  [void](Read-Host)
+}
+`;
+  await fsp.writeFile(path.join(staging, 'install.ps1'), script, 'utf8');
+}
+
 /** After a swap, remove the previous install once the new one has started. */
 export async function finishPendingUpdate(ctx: vscode.ExtensionContext): Promise<void> {
   const pending = ctx.globalState.get<string>(PENDING_KEY);
   if (!pending) return;
   const L = layout();
   const current = studioVersion();
-  if (!L || current !== pending) return; // not yet running the new one
+  if (!L) return;
+  if (current !== pending) {
+    // Still on the old version: the swap did not happen («Later», or the
+    // installer failed). Windows keeps the downloaded archive staged — offer
+    // the restart again instead of downloading it a second time; elsewhere
+    // the staged tree is gone with the failed run, so just forget and let the
+    // regular check offer the update afresh.
+    if (L.kind === 'win32') {
+      const staging = L.installDir + '.staging';
+      const ok = await fsp.stat(path.join(staging, 'install.ps1')).then(() => true, () => false);
+      if (ok) {
+        trace(`pending ${pending} still staged — offering restart again`);
+        const restart = vscode.l10n.t('Restart now');
+        const pick = await vscode.window.showInformationMessage(
+          vscode.l10n.t('ExecAI Studio {0} is downloaded. Restart to install it?', pending),
+          { modal: true, detail: vscode.l10n.t('The editor closes, a small window shows the installation progress, and the new version starts by itself. The previous version is kept until then.') },
+          restart, vscode.l10n.t('Later'));
+        if (pick === restart) {
+          const { spawn } = await import('node:child_process');
+          spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(staging, 'install.ps1')],
+            { detached: true, stdio: 'ignore', windowsHide: false }).unref();
+          await vscode.commands.executeCommand('workbench.action.quit');
+        }
+        return;
+      }
+    }
+    await ctx.globalState.update(PENDING_KEY, undefined);
+    return;
+  }
   await fsp.rm(L.installDir + '.old', { recursive: true, force: true }).catch(() => undefined);
+  await fsp.rm(L.installDir + '.staging', { recursive: true, force: true }).catch(() => undefined);
   await ctx.globalState.update(PENDING_KEY, undefined);
   void vscode.window.showInformationMessage(vscode.l10n.t('ExecAI Studio updated to {0}.', current));
 }
