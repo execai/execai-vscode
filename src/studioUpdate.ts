@@ -182,30 +182,64 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string, opts: 
   const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
   const { spawn } = await import('node:child_process');
   await ctx.globalState.update(PENDING_KEY, version);
-  trace(`starting updater ${L.updater} for ${version}`);
+  // Prefer the updater of the release being installed — fixes to the updater
+  // itself then reach every older install, not only ones built after the fix.
+  // The copy shipped with this install is the fallback when the network
+  // cannot deliver a fresh one.
+  const updater = await freshUpdater(L, version);
+  trace(`starting updater ${updater} for ${version}`);
   if (L.kind === 'win32') {
     // `start` opens a NEW console owned by cmd, not by the extension host —
     // that is what keeps it alive when the editor quits and shows the window.
     const args = ['/c', 'start', '"ExecAI Studio update"', 'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-      '-File', `"${L.updater}"`, '-Version', version, '-Install', `"${L.installDir}"`];
+      '-File', `"${updater}"`, '-Version', version, '-Install', `"${L.installDir}"`];
     if (folder) args.push('-Folder', `"${folder}"`);
     spawn('cmd.exe', args, { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true }).unref();
   } else if (L.kind === 'darwin') {
     // Terminal.app shows the progress; a headless fallback runs it silently.
-    const cmd = `${sh(L.updater)} ${sh(version)} ${sh(L.installDir)} ${folder ? sh(folder) : ''}`;
+    const cmd = `bash ${sh(updater)} ${sh(version)} ${sh(L.installDir)} ${folder ? sh(folder) : ''}`;
     const osa = `tell application "Terminal" to do script ${JSON.stringify(cmd)}`;
     const t = spawn('osascript', ['-e', osa], { detached: true, stdio: 'ignore' });
-    t.on('error', () => spawn('/bin/bash', [L.updater, version, L.installDir, ...(folder ? [folder] : [])], { detached: true, stdio: 'ignore' }).unref());
+    t.on('error', () => spawn('/bin/bash', [updater, version, L.installDir, ...(folder ? [folder] : [])], { detached: true, stdio: 'ignore' }).unref());
     t.unref();
   } else {
     // Linux: a terminal window if one exists, silent otherwise (the desktop
     // will simply see the editor come back a bit later).
     const term = await findTerminal();
-    const argv = [L.updater, version, L.installDir, ...(folder ? [folder] : [])];
+    const argv = ['bash', updater, version, L.installDir, ...(folder ? [folder] : [])];
     if (term) spawn(term.bin, [...term.args, ...argv], { detached: true, stdio: 'ignore' }).unref();
-    else spawn('/bin/bash', argv, { detached: true, stdio: 'ignore' }).unref();
+    else spawn('/bin/bash', argv.slice(1), { detached: true, stdio: 'ignore' }).unref();
   }
   await vscode.commands.executeCommand('workbench.action.quit');
+}
+
+/**
+ * The updater script of the target release, fetched into the user's temp dir
+ * (GitHub at the release tag first, the mirror second); the shipped copy when
+ * neither answers. A sanity check on size keeps a 404 page out of PowerShell.
+ */
+async function freshUpdater(L: NonNullable<ReturnType<typeof layout>>, version: string): Promise<string> {
+  const name = L.kind === 'win32' ? 'updater.ps1' : 'updater.sh';
+  const dest = path.join(os.tmpdir(), `execai-studio-updater-${version}-${name}`);
+  const urls = [
+    `https://raw.githubusercontent.com/execai/execai-studio/v${version}/updater/${name}`,
+    `${MIRROR_BASE}/${name}`,
+  ];
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(15000) });
+      if (!r.ok) continue;
+      const text = await r.text();
+      if (text.length < 1000 || !/ExecAI Studio updater/.test(text)) continue;
+      await fsp.writeFile(dest, text, 'utf8');
+      if (L.kind !== 'win32') await fsp.chmod(dest, 0o755);
+      trace(`fresh updater from ${url}`);
+      return dest;
+    } catch (e) {
+      trace(`fresh updater ${url} failed: ${String(e)}`);
+    }
+  }
+  return L.updater;
 }
 
 function sh(v: string): string { return `'${v.replace(/'/g, `'\\''`)}'`; }

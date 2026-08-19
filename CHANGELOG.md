@@ -3,6 +3,16 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.24 — 2026-08-19
+
+### Changed
+
+- **The Studio updater is taken from the release being installed.** Before
+  starting it, the extension fetches `updater.ps1`/`updater.sh` of the target
+  release (GitHub at the tag, then the mirror) and runs that; the copy shipped
+  with the current install is only the offline fallback. A fix to the updater
+  now reaches every install, not only the ones built after it.
+
 ## 0.2.23 — 2026-08-18
 
 ### Changed
