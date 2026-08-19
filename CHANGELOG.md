@@ -3,6 +3,14 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.25 — 2026-08-19
+
+### Fixed
+
+- The Studio updater is started with its working directory outside the
+  installation — a folder that is some process's current directory cannot be
+  moved on Windows («занят другим приложением» at the install step).
+
 ## 0.2.24 — 2026-08-19
 
 ### Changed

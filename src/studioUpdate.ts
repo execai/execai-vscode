@@ -194,21 +194,23 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string, opts: 
     const args = ['/c', 'start', '"ExecAI Studio update"', 'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
       '-File', `"${updater}"`, '-Version', version, '-Install', `"${L.installDir}"`];
     if (folder) args.push('-Folder', `"${folder}"`);
-    spawn('cmd.exe', args, { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true }).unref();
+    // cwd outside the install: a folder that is some process's working
+    // directory cannot be moved, and cmd/powershell inherit ours otherwise.
+    spawn('cmd.exe', args, { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true, cwd: os.tmpdir() }).unref();
   } else if (L.kind === 'darwin') {
     // Terminal.app shows the progress; a headless fallback runs it silently.
     const cmd = `bash ${sh(updater)} ${sh(version)} ${sh(L.installDir)} ${folder ? sh(folder) : ''}`;
     const osa = `tell application "Terminal" to do script ${JSON.stringify(cmd)}`;
-    const t = spawn('osascript', ['-e', osa], { detached: true, stdio: 'ignore' });
-    t.on('error', () => spawn('/bin/bash', [updater, version, L.installDir, ...(folder ? [folder] : [])], { detached: true, stdio: 'ignore' }).unref());
+    const t = spawn('osascript', ['-e', osa], { detached: true, stdio: 'ignore', cwd: os.tmpdir() });
+    t.on('error', () => spawn('/bin/bash', [updater, version, L.installDir, ...(folder ? [folder] : [])], { detached: true, stdio: 'ignore', cwd: os.tmpdir() }).unref());
     t.unref();
   } else {
     // Linux: a terminal window if one exists, silent otherwise (the desktop
     // will simply see the editor come back a bit later).
     const term = await findTerminal();
     const argv = ['bash', updater, version, L.installDir, ...(folder ? [folder] : [])];
-    if (term) spawn(term.bin, [...term.args, ...argv], { detached: true, stdio: 'ignore' }).unref();
-    else spawn('/bin/bash', argv.slice(1), { detached: true, stdio: 'ignore' }).unref();
+    if (term) spawn(term.bin, [...term.args, ...argv], { detached: true, stdio: 'ignore', cwd: os.tmpdir() }).unref();
+    else spawn('/bin/bash', argv.slice(1), { detached: true, stdio: 'ignore', cwd: os.tmpdir() }).unref();
   }
   await vscode.commands.executeCommand('workbench.action.quit');
 }
