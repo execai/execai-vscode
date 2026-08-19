@@ -41,6 +41,29 @@ export function renderMarkdown(src: string): string {
         ? '<a href="' + href + '">' + label + '</a>'
         : m; // not a link we trust — leave it as plain text
     });
+    // Bare URLs the model wrote as plain text. Only outside an existing <a…>,
+    // which is why this runs after the markdown-link pass and skips anything
+    // already wrapped: the negative lookbehind on quote/> is the cheap way to
+    // tell "https://x" in prose from href="https://x" just produced above.
+    t = t.replace(/(^|[\s(])(https?:\/\/[^\s<>"')\]]+)/g, (_m, pre, url) => {
+      // Trailing punctuation belongs to the sentence, not to the link.
+      const tail = (url.match(/[.,;:!?)\]]+$/) || [''])[0];
+      const clean = url.slice(0, url.length - tail.length);
+      return pre + '<a href="' + clean + '">' + clean + '</a>' + tail;
+    });
+    // Paths to project files: src/app.ts, internal/agent/memory.go:42.
+    // Deliberately narrow — a slash or a line number is required, otherwise
+    // every "package.json" mentioned in passing becomes a link and the answer
+    // turns blue. The webview turns these into "open in the editor" clicks.
+    t = t.replace(
+      /(^|[\s(«"'`])((?:[\w.@-]+\/)+[\w.@-]+\.[a-z]{1,5}|[\w.@-]+\.[a-z]{1,5}(?=:\d))(:(\d+))?(?::(\d+))?/gi,
+      (m, pre, path, _c, line) => {
+        if (/^https?:/i.test(path) || path.indexOf('\uE000') >= 0) return m;
+        const attr = ' data-file="' + path + '"' + (line ? ' data-line="' + line + '"' : '');
+        const shown = path + (line ? ':' + line : '');
+        return pre + '<a href="#"' + attr + '>' + shown + '</a>';
+      },
+    );
     t = t.replace(/(^|[^*])\*\*([^*\n]+)\*\*/g, '$1<strong>$2</strong>');
     t = t.replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1<em>$2</em>');
     t = t.replace(/(^|[^_\w])_([^_\n]+)_/g, '$1<em>$2</em>');

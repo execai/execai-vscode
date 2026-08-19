@@ -15,6 +15,9 @@ The [execai](https://github.com/execai/execai-agent) agent in your editor sideba
 - **Agent questions** (AskUser) — when the call is yours, the options arrive as buttons
 - **Editor context** — the active file and selection are attached to your message (`execai.attachContext`)
 - **Changed files** — chips under the turn, click to open the file
+- **Chat tabs** at the top of the panel, the way an editor shows open files: every chat of this project, one click to switch, «×» to close (the chat stays in history and a running turn keeps going), drag to reorder
+- **Clickable links** — a URL opens in the browser, a project path (`internal/agent/memory.go:42`) opens the file at that line
+- **Copy buttons** — one on every code block, one on the answer as a whole (it copies the original markdown)
 - **Stop** ends the current turn; **New chat** resets the history and the session permissions
 - **Terminal escape hatch** — the "ExecAI: Open in a terminal" command gives you the full TUI
 

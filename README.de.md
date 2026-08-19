@@ -15,6 +15,9 @@ Der Agent [execai](https://github.com/execai/execai-agent) in der Seitenleiste d
 - **Rückfragen des Agenten** (AskUser) — wenn die Entscheidung bei dir liegt, kommen die Optionen als Schaltflächen
 - **Editor-Kontext** — die aktive Datei und die Auswahl werden an die Nachricht angehängt (`execai.attachContext`)
 - **Geänderte Dateien** — Chips unter dem Zug, ein Klick öffnet die Datei
+- **Chat-Tabs** oben im Panel, wie Datei-Tabs im Editor: alle Chats des Projekts, ein Klick zum Wechseln, «×» zum Schließen (der Chat bleibt in der Historie, ein laufender Turn läuft weiter), Ziehen zum Umsortieren
+- **Klickbare Links** — eine URL öffnet im Browser, ein Projektpfad (`internal/agent/memory.go:42`) öffnet die Datei an dieser Zeile
+- **Kopier-Buttons** — an jedem Codeblock und an der ganzen Antwort (kopiert das ursprüngliche Markdown)
 - **Stopp** bricht den laufenden Zug ab; **Neuer Chat** setzt Verlauf und Sitzungsrechte zurück
 - **Notausgang Terminal** — der Befehl „ExecAI: Im Terminal öffnen“ liefert das vollständige TUI
 

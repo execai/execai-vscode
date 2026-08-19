@@ -2,7 +2,7 @@
   "name": "execai",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.2.25",
+  "version": "0.2.28",
   "publisher": "execai",
   "license": "BUSL-1.1",
   "icon": "media/icon.png",

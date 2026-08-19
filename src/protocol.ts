@@ -48,6 +48,9 @@ export interface AgentEvent {
   sources?: NamedItem[];
   efforts?: NamedItem[];
   connectable?: NamedItem[];
+  chats?: NamedItem[];
+  securities?: NamedItem[];
+  security?: string;
   user?: string;
   effort?: string;
   max_iter?: number;

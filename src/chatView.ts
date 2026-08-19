@@ -173,12 +173,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   // ── human actions ───────────────────────────────────────────────
 
-  private fromWebview(m: { type: string; text?: string; id?: string; value?: string; path?: string; files?: string[] }): void {
+  private fromWebview(m: { type: string; text?: string; id?: string; value?: string; path?: string; line?: string; files?: string[] }): void {
     switch (m.type) {
       case 'ui_ready': {
         this.uiReady = true;
         for (const e of this.pending) void this.view?.webview.postMessage(e);
         this.pending = [];
+        const tabs = this.ctx.workspaceState.get<string>('execai.tabs', '');
+        if (tabs) this.toWebview({ type: 'tabs_state', text: tabs });
         break;
       }
       case 'send': {
@@ -201,6 +203,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
       case 'pick_files':
         void this.pickFiles();
+        break;
+      case 'tabs_state':
+        // Which chat tabs are on the strip and in what order is a property of
+        // this workspace, not of the agent: it survives a reload here.
+        void this.ctx.workspaceState.update('execai.tabs', m.text || '');
         break;
       case 'copy_text':
         // The webview cannot rely on navigator.clipboard in every host — the
@@ -259,11 +266,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case 'open_file': {
         if (!m.path) break;
-        const ws = vscode.workspace.workspaceFolders?.[0];
-        const uri = m.path.startsWith('/')
-          ? vscode.Uri.file(m.path)
-          : vscode.Uri.joinPath(ws!.uri, m.path);
-        void vscode.window.showTextDocument(uri, { preview: true });
+        void this.openFile(m.path, m.line);
+        break;
+      }
+      case 'open_external': {
+        // Links in an answer are text the model produced — only the schemes a
+        // chat has any business opening are followed.
+        const url = m.text || '';
+        if (!/^(https?:|mailto:)/i.test(url)) break;
+        void vscode.env.openExternal(vscode.Uri.parse(url));
         break;
       }
       case 'restart':
@@ -287,6 +298,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       ? selection.slice(0, 20000) + '\n…(truncated)'
       : selection;
     return { path, selection: cut, language: ed.document.languageId };
+  }
+
+  /**
+   * Opens a file mentioned in the chat, optionally at a line. Paths in an
+   * answer are guesses — the model writes what it believes exists — so a miss
+   * is reported as a notice instead of an unhandled rejection.
+   */
+  private async openFile(path: string, line?: string): Promise<void> {
+    const ws = vscode.workspace.workspaceFolders?.[0];
+    const uri = path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(path)
+      ? vscode.Uri.file(path)
+      : ws
+        ? vscode.Uri.joinPath(ws.uri, path)
+        : null;
+    if (!uri) {
+      void vscode.window.showWarningMessage(
+        vscode.l10n.t('Open a project folder to follow links to its files.'));
+      return;
+    }
+    try {
+      await vscode.workspace.fs.stat(uri);
+    } catch {
+      void vscode.window.showWarningMessage(vscode.l10n.t('No such file: {0}', path));
+      return;
+    }
+    const n = Math.max(0, (parseInt(line || '0', 10) || 1) - 1);
+    const at = new vscode.Range(n, 0, n, 0);
+    await vscode.window.showTextDocument(uri, { preview: true, selection: at });
   }
 
   /** Connecting a source: the key is asked for with an editor input box. */

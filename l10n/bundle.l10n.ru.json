@@ -69,5 +69,7 @@
   "The editor closes, a small window shows the installation progress, and the new version starts by itself. The previous version is kept until then.": "Редактор закроется, небольшое окно покажет ход установки, и новая версия запустится сама. Предыдущая версия сохраняется до этого момента.",
   "downloading {0} — {1}%": "скачиваю {0} — {1}%",
   "Update and restart": "Обновить и перезапустить",
-  "The editor closes, a small window downloads and installs the update with progress, and the new version starts by itself. The previous version is kept until then.": "Редактор закроется, небольшое окно скачает и установит обновление с индикацией хода, и новая версия запустится сама. Предыдущая версия сохраняется до этого момента."
+  "The editor closes, a small window downloads and installs the update with progress, and the new version starts by itself. The previous version is kept until then.": "Редактор закроется, небольшое окно скачает и установит обновление с индикацией хода, и новая версия запустится сама. Предыдущая версия сохраняется до этого момента.",
+  "Open a project folder to follow links to its files.": "Открой папку проекта, чтобы переходить по ссылкам на её файлы.",
+  "No such file: {0}": "Файла нет: {0}"
 }

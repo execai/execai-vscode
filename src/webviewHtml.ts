@@ -42,6 +42,12 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     mRestart: 'Restart the agent',
     mTerminal: 'Open execai in a terminal',
     mCheckUpdates: 'Check for Studio updates',
+    copy: 'copy',
+    copied: 'copied ✓',
+    copyMsg: 'copy the answer',
+    newTabTitle: 'New chat',
+    closeTab: 'Close the tab (the chat stays in history)',
+    untitledChat: 'New chat',
     back: '← back',
     listEmpty: 'the list has not arrived yet — reopen the menu',
     histHead: 'History of this project',
@@ -90,6 +96,12 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     mRestart: 'Перезапустить агента',
     mTerminal: 'Открыть execai в терминале',
     mCheckUpdates: 'Проверить обновления Studio',
+    copy: 'копировать',
+    copied: 'скопировано ✓',
+    copyMsg: 'копировать ответ',
+    newTabTitle: 'Новый чат',
+    closeTab: 'Закрыть вкладку (чат останется в истории)',
+    untitledChat: 'Новый чат',
     back: '← назад',
     listEmpty: 'список ещё не приехал — открой меню заново',
     histHead: 'История этого проекта',
@@ -250,6 +262,65 @@ export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lan
     border: 1px solid var(--vscode-panel-border);
   }
   .login-copy:hover { background: var(--vscode-list-hoverBackground); }
+  /* Chat tabs — the way an editor shows open documents: what exists, what is
+     current, one click to switch. The panel is narrow, so they scroll. */
+  #tabs {
+    display: flex; align-items: stretch; gap: 2px;
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-editorGroupHeader-tabsBackground, var(--vscode-sideBar-background));
+  }
+  #tabs:empty { display: none; }
+  #tabs::-webkit-scrollbar { height: 3px; }
+  #tabs::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background); }
+  #tabs::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground); }
+  #tabs .tab { flex: 0 0 auto; }
+  #tabs .tab {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 8px; max-width: 160px; cursor: pointer;
+    font-size: 11.5px; white-space: nowrap;
+    color: var(--vscode-tab-inactiveForeground, var(--vscode-descriptionForeground));
+    background: var(--vscode-tab-inactiveBackground, transparent);
+    border-right: 1px solid var(--vscode-panel-border);
+    border-top: 1px solid transparent;
+  }
+  #tabs .tab span { overflow: hidden; text-overflow: ellipsis; }
+  #tabs .tab i {
+    font-style: normal; opacity: 0; cursor: pointer; padding: 0 2px;
+    border-radius: 3px; line-height: 1;
+  }
+  #tabs .tab:hover i, #tabs .tab.active i { opacity: .6; }
+  #tabs .tab i:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); }
+  #tabs .tab.dragging { opacity: .5; }
+  #tabs .tab.dropbefore { box-shadow: inset 2px 0 0 var(--vscode-focusBorder); }
+  #tabs .tab:hover { background: var(--vscode-list-hoverBackground); }
+  #tabs .tab.active {
+    color: var(--vscode-tab-activeForeground, var(--vscode-foreground));
+    background: var(--vscode-tab-activeBackground, var(--vscode-editor-background));
+    border-top-color: var(--vscode-focusBorder);
+  }
+  #tabs .newtab {
+    padding: 4px 9px; cursor: pointer; border: none; background: none;
+    color: var(--vscode-descriptionForeground); font-size: 13px; line-height: 1;
+  }
+  #tabs .newtab:hover { color: var(--vscode-foreground); background: var(--vscode-list-hoverBackground); }
+  /* Copy buttons: on a code block and on the answer as a whole. Hidden until
+     the pointer is on the block — the chat is for reading, not for buttons. */
+  .codewrap { position: relative; }
+  .codewrap .copy, .msg.assistant > .copy-msg {
+    position: absolute; top: 4px; right: 4px; z-index: 1;
+    padding: 2px 7px; border-radius: 4px; cursor: pointer;
+    font-size: 10.5px; line-height: 1.5;
+    color: var(--vscode-foreground);
+    background: var(--vscode-button-secondaryBackground);
+    border: 1px solid var(--vscode-panel-border);
+    opacity: 0; transition: opacity 120ms ease;
+  }
+  .msg.assistant { position: relative; }
+  .msg.assistant > .copy-msg { top: 0; right: 0; }
+  .codewrap:hover .copy, .msg.assistant:hover > .copy-msg { opacity: .85; }
+  .codewrap .copy:hover, .msg.assistant > .copy-msg:hover { opacity: 1; background: var(--vscode-list-hoverBackground); }
+  .assistant a[data-file] { cursor: pointer; }
   .files { margin: 6px 0; display: flex; flex-wrap: wrap; gap: 4px; }
   .files span {
     cursor: pointer; font-size: 11px; border-radius: 4px; padding: 2px 7px;
@@ -408,6 +479,7 @@ export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lan
 </style>
 </head>
 <body>
+  <div id="tabs"></div>
   <div id="log">
     <div id="empty">${T.empty}</div>
   </div>
@@ -484,6 +556,176 @@ function el(tag, cls, text) {
   return e;
 }
 function scroll() { log.scrollTop = log.scrollHeight; }
+
+const tabs = document.getElementById('tabs');
+
+// Chat tabs. The list comes from the agent (one entry per chat of this
+// project, with the current one flagged); the strip is redrawn whole because
+// it is a handful of nodes and diffing them would cost more than it saves.
+// Which chats sit on the strip, and in what order, belongs to the panel — not
+// to the agent. Closing a tab is a view action: the chat stays in history, a
+// turn in flight keeps running, and opening it from history brings it back.
+let tabsHidden = [];
+let tabsOrder = [];
+function saveTabs() {
+  vscode.postMessage({ type: 'tabs_state', text: JSON.stringify({ hidden: tabsHidden, order: tabsOrder }) });
+}
+// The agent lists chats by last-modified, and switching chats saves the one
+// you are leaving — so its list reshuffles on every click. Tabs must not: the
+// strip keeps the order a chat first appeared in (or the one you dragged it
+// to), exactly like editor tabs. New chats are appended at the end.
+function rememberOrder() {
+  let added = false;
+  for (const c of chatsData) {
+    if (tabsOrder.indexOf(c.id) < 0) { tabsOrder.push(c.id); added = true; }
+  }
+  // Forget ids that no longer exist, so the list cannot grow without bound.
+  const alive = chatsData.map(c => c.id);
+  const before = tabsOrder.length;
+  tabsOrder = tabsOrder.filter(id => alive.indexOf(id) >= 0);
+  if (added || tabsOrder.length !== before) saveTabs();
+}
+function visibleChats() {
+  const pos = (id) => { const i = tabsOrder.indexOf(id); return i < 0 ? 1e6 : i; };
+  return chatsData.filter(c => tabsHidden.indexOf(c.id) < 0).slice()
+    .sort((a, b) => pos(a.id) - pos(b.id));
+}
+function renderTabs() {
+  rememberOrder();
+  tabs.innerHTML = '';
+  const list = visibleChats();
+  if (!list.length) return; // nothing to switch between — no empty strip
+  for (const c of list) {
+    const t = el('div', 'tab' + (c.active ? ' active' : ''));
+    const label = (c.label || '').trim() || T.untitledChat;
+    t.title = label;
+    t.draggable = true;
+    t.dataset.chat = c.id;
+    t.appendChild(el('span', '', label));
+    const x = el('i', '', '\u00d7');
+    x.title = T.closeTab;
+    const close = (e) => {
+      if (e) e.stopPropagation();
+      if (tabsHidden.indexOf(c.id) < 0) tabsHidden.push(c.id);
+      saveTabs();
+      renderTabs();
+    };
+    x.onclick = close;
+    t.appendChild(x);
+    t.onclick = () => {
+      if (c.active) return;
+      vscode.postMessage({ type: 'agent_command', name: 'load_chat', value: c.id });
+    };
+    // Middle click closes, the way it does on editor tabs.
+    t.onauxclick = (e) => { if (e.button === 1) { e.preventDefault(); close(e); } };
+    t.ondragstart = (e) => {
+      e.dataTransfer.setData('text/plain', c.id);
+      t.classList.add('dragging');
+    };
+    t.ondragend = () => {
+      t.classList.remove('dragging');
+      for (const n of tabs.children) n.classList.remove('dropbefore');
+    };
+    t.ondragover = (e) => { e.preventDefault(); t.classList.add('dropbefore'); };
+    t.ondragleave = () => t.classList.remove('dropbefore');
+    t.ondrop = (e) => {
+      e.preventDefault();
+      t.classList.remove('dropbefore');
+      const moved = e.dataTransfer.getData('text/plain');
+      if (!moved || moved === c.id) return;
+      const ids = visibleChats().map(v => v.id).filter(id => id !== moved);
+      const at = ids.indexOf(c.id);
+      ids.splice(at < 0 ? ids.length : at, 0, moved);
+      tabsOrder = ids;
+      saveTabs();
+      renderTabs();
+    };
+    tabs.appendChild(t);
+  }
+  const plus = el('button', 'newtab', '+');
+  plus.title = T.newTabTitle;
+  plus.onclick = () => vscode.postMessage({ type: 'new_chat_ui' });
+  tabs.appendChild(plus);
+  // The strip is narrower than the tabs almost immediately — keep the current
+  // chat visible instead of leaving the user to scroll for it.
+  const act = tabs.querySelector('.tab.active');
+  if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+// A vertical wheel over a horizontal strip does nothing by default; here it is
+// the only way to reach tabs that do not fit.
+tabs.addEventListener('wheel', (e) => {
+  if (e.deltaY === 0 || tabs.scrollWidth <= tabs.clientWidth) return;
+  tabs.scrollLeft += e.deltaY;
+  e.preventDefault();
+}, { passive: false });
+function refreshTabs() { vscode.postMessage({ type: 'agent_command', name: 'list_chats' }); }
+
+// Copy buttons. The answer is re-rendered from markdown on every token, so the
+// buttons cannot live in the markup — they are attached after a render, and
+// only for blocks that do not have one yet.
+function decorate(root) {
+  const pres = root.querySelectorAll('pre.code');
+  for (const pre of pres) {
+    if (pre.parentElement && pre.parentElement.classList.contains('codewrap')) continue;
+    const wrap = el('div', 'codewrap');
+    pre.parentElement.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    const b = el('button', 'copy', T.copy);
+    b.dataset.copyCode = '1';
+    wrap.appendChild(b);
+  }
+  if (root.classList && root.classList.contains('assistant') && !root.querySelector(':scope > .copy-msg')) {
+    const b = el('button', 'copy-msg', T.copyMsg);
+    b.dataset.copyMsg = '1';
+    root.appendChild(b);
+  }
+}
+
+// One delegated handler for the whole log: links and copy buttons. Delegation
+// is not a style choice here — innerHTML of an answer is replaced on every
+// token, so anything bound to a node inside it would be gone a moment later.
+log.addEventListener('click', (e) => {
+  const path = e.composedPath();
+  for (const node of path) {
+    if (!node || !node.dataset) continue;
+    if (node.dataset.copyCode) {
+      const wrap = node.parentElement;
+      const code = wrap && wrap.querySelector('pre.code');
+      if (code) vscode.postMessage({ type: 'copy_text', text: code.textContent || '' });
+      node.textContent = T.copied;
+      setTimeout(() => { node.textContent = T.copy; }, 1500);
+      e.preventDefault();
+      return;
+    }
+    if (node.dataset.copyMsg) {
+      const msg = node.parentElement;
+      // The raw markdown, not the rendered text: what the model actually wrote.
+      const text = (msg && msg._md) || (msg ? msg.innerText : '');
+      vscode.postMessage({ type: 'copy_text', text });
+      node.textContent = T.copied;
+      setTimeout(() => { node.textContent = T.copyMsg; }, 1500);
+      e.preventDefault();
+      return;
+    }
+    if (node.tagName === 'A') {
+      const file = node.dataset.file;
+      if (file) {
+        vscode.postMessage({ type: 'open_file', path: file, line: node.dataset.line || '' });
+        e.preventDefault();
+        return;
+      }
+      const href = node.getAttribute('href') || '';
+      if (/^(https?:|mailto:)/i.test(href)) {
+        // Open through the extension: the webview host would also handle this,
+        // but then the panel has no say in what counts as a safe link.
+        vscode.postMessage({ type: 'open_external', text: href });
+        e.preventDefault();
+      }
+      return;
+    }
+  }
+});
 
 // Turn timer: how long the agent has been working. Seconds beat a spinner —
 // they show whether it is thinking or hung.
@@ -658,6 +900,10 @@ function menuChats() {
   for (const c of chatsData) {
     menu.appendChild(mi(c.label || c.id, '', () => {
       closeMenu();
+      // Reopening from history brings the tab back: hidden means "not on my
+      // strip right now", not "gone".
+      tabsHidden = tabsHidden.filter(id => id !== c.id);
+      saveTabs();
       vscode.postMessage({ type: 'agent_command', name: 'load_chat', value: c.id });
     }, !!c.active));
   }
@@ -810,6 +1056,7 @@ window.addEventListener('message', (ev) => {
   const e = ev.data;
   switch (e.type) {
     case 'ready': {
+      refreshTabs();
       clearBusy();
       clearEmpty();
       stateData.model = e.model || ''; stateData.source = e.source || '';
@@ -903,7 +1150,13 @@ window.addEventListener('message', (ev) => {
       stopTimer();
       for (const t of Object.values(tools)) t.box.classList.remove('run');
       if (curThinking) curThinking.classList.remove('live');
+      // Copy buttons go on once the answer is complete: during streaming the
+      // markdown is half-parsed and the block boundaries still move.
+      if (curAssistant) decorate(curAssistant);
       curAssistant = null; curThinking = null;
+      // A chat gets its title from the first exchange, and there is no event
+      // for that — ask for the list again when a turn ends.
+      refreshTabs();
       break;
     case 'studio':
       isStudio = true;
@@ -924,10 +1177,21 @@ window.addEventListener('message', (ev) => {
       log.innerHTML = '';
       tools = {}; curAssistant = null; curThinking = null;
       log.appendChild(el('div', 'notice', T.newChatNotice));
+      refreshTabs();
       break;
+    case 'tabs_state': {
+      try {
+        const st = JSON.parse(e.text || '{}');
+        tabsHidden = Array.isArray(st.hidden) ? st.hidden : [];
+        tabsOrder = Array.isArray(st.order) ? st.order : [];
+      } catch (err) { /* first run — defaults are fine */ }
+      renderTabs();
+      break;
+    }
     case 'chats':
       chatsData = e.chats || [];
       if (menuView === 'chats') menuChats();
+      renderTabs();
       break;
     case 'chat_loaded': {
       log.innerHTML = '';
@@ -951,6 +1215,8 @@ window.addEventListener('message', (ev) => {
       }
       log.appendChild(el('div', 'notice', T.chatRestored));
       scroll();
+      for (const a of log.querySelectorAll('.msg.assistant')) decorate(a);
+      refreshTabs();
       break;
     }
     case 'state':

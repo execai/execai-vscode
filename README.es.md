@@ -15,6 +15,9 @@ El agente [execai](https://github.com/execai/execai-agent) en la barra lateral d
 - **Preguntas del agente** (AskUser) — cuando la decisión es tuya, las opciones llegan como botones
 - **Contexto del editor** — el archivo activo y la selección se adjuntan al mensaje (`execai.attachContext`)
 - **Archivos modificados** — fichas bajo el turno; al hacer clic se abre el archivo
+- **Pestañas de chats** en la parte superior del panel, como las pestañas de archivos: todos los chats del proyecto, un clic para cambiar, «×» para cerrar (el chat sigue en el historial y un turno en curso continúa), arrastrar para reordenar
+- **Enlaces clicables** — una URL se abre en el navegador; una ruta del proyecto (`internal/agent/memory.go:42`) abre el archivo en esa línea
+- **Botones de copiar** — en cada bloque de código y en la respuesta completa (copia el markdown original)
 - **Detener** corta el turno actual; **Nuevo chat** reinicia el historial y los permisos de sesión
 - **Salida de emergencia al terminal** — el comando «ExecAI: Abrir en un terminal» te da el TUI completo
 

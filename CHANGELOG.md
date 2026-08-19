@@ -3,6 +3,44 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.28 — 2026-08-19
+
+### Fixed
+
+- **Clicking a tab highlighted a different one.** The agent lists chats by last
+  modified, and switching saves the chat you are leaving — so its list
+  reshuffles on every click and the strip re-sorted underneath the pointer. Tab
+  order now belongs to the panel: a chat keeps the place it first appeared in,
+  or the one you dragged it to, and new chats are appended at the end.
+- **Tabs that do not fit are reachable**: the strip scrolls with the mouse
+  wheel, has a slim scrollbar, and keeps the current chat in view.
+
+## 0.2.27 — 2026-08-19
+
+### Added
+
+- **Chat tabs close and reorder.** A × on the tab (or a middle click) takes it
+  off the strip — the chat itself stays in history and a turn in flight keeps
+  running; opening it from the history menu brings the tab back. Tabs drag to
+  reorder, and both the order and what is closed are remembered per workspace.
+
+## 0.2.26 — 2026-08-19
+
+### Added
+
+- **Links in answers are clickable.** A URL the model wrote opens in the
+  browser; a path to a project file (`internal/agent/memory.go:42`) opens the
+  file in the editor at that line. Paths are only linked when they carry a
+  directory or a line number — otherwise every «package.json» in passing would
+  turn blue. A path that does not exist says so instead of failing silently.
+- **Copy buttons**: one on every code block, one on the answer as a whole (it
+  copies the original markdown, not the rendered text). They appear on hover,
+  so the chat still reads like text.
+- **Chat tabs at the top of the panel**, the way an editor shows open files:
+  every chat of this project, the current one highlighted, one click to switch,
+  «+» for a new one. Titles refresh when a turn ends — a chat is named after
+  its first exchange.
+
 ## 0.2.25 — 2026-08-19
 
 ### Fixed
