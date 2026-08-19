@@ -3,6 +3,18 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.29 — 2026-08-20
+
+### Fixed
+
+- **After a Studio update the new build failed to start** with «Cannot find
+  module 'c:\…'». The extension host is Electron running in Node mode, and
+  every child process inherits `ELECTRON_RUN_AS_NODE` — so the freshly
+  installed editor started as node and tried to require its first argument, the
+  project folder, as a module. The updater is now started with an environment
+  cleared of `ELECTRON_*` and `VSCODE_*`, and the updater scripts clear it again
+  themselves.
+
 ## 0.2.28 — 2026-08-19
 
 ### Fixed

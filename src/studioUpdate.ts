@@ -181,6 +181,16 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string, opts: 
 
   const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
   const { spawn } = await import('node:child_process');
+  // The extension host is Electron running in Node mode, and every child
+  // inherits that. With ELECTRON_RUN_AS_NODE set, the newly installed editor
+  // starts as node and tries to require its first argument — the project
+  // folder — as a module. Everything VSCODE_* likewise belongs to the instance
+  // that is about to exit, not to the one the updater will start.
+  const cleanEnv: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (/^(ELECTRON_|VSCODE_)/.test(k)) continue;
+    cleanEnv[k] = v;
+  }
   await ctx.globalState.update(PENDING_KEY, version);
   // Prefer the updater of the release being installed — fixes to the updater
   // itself then reach every older install, not only ones built after the fix.
@@ -196,21 +206,21 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string, opts: 
     if (folder) args.push('-Folder', `"${folder}"`);
     // cwd outside the install: a folder that is some process's working
     // directory cannot be moved, and cmd/powershell inherit ours otherwise.
-    spawn('cmd.exe', args, { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true, cwd: os.tmpdir() }).unref();
+    spawn('cmd.exe', args, { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true, cwd: os.tmpdir(), env: cleanEnv }).unref();
   } else if (L.kind === 'darwin') {
     // Terminal.app shows the progress; a headless fallback runs it silently.
     const cmd = `bash ${sh(updater)} ${sh(version)} ${sh(L.installDir)} ${folder ? sh(folder) : ''}`;
     const osa = `tell application "Terminal" to do script ${JSON.stringify(cmd)}`;
-    const t = spawn('osascript', ['-e', osa], { detached: true, stdio: 'ignore', cwd: os.tmpdir() });
-    t.on('error', () => spawn('/bin/bash', [updater, version, L.installDir, ...(folder ? [folder] : [])], { detached: true, stdio: 'ignore', cwd: os.tmpdir() }).unref());
+    const t = spawn('osascript', ['-e', osa], { detached: true, stdio: 'ignore', cwd: os.tmpdir(), env: cleanEnv });
+    t.on('error', () => spawn('/bin/bash', [updater, version, L.installDir, ...(folder ? [folder] : [])], { detached: true, stdio: 'ignore', cwd: os.tmpdir(), env: cleanEnv }).unref());
     t.unref();
   } else {
     // Linux: a terminal window if one exists, silent otherwise (the desktop
     // will simply see the editor come back a bit later).
     const term = await findTerminal();
     const argv = ['bash', updater, version, L.installDir, ...(folder ? [folder] : [])];
-    if (term) spawn(term.bin, [...term.args, ...argv], { detached: true, stdio: 'ignore', cwd: os.tmpdir() }).unref();
-    else spawn('/bin/bash', argv.slice(1), { detached: true, stdio: 'ignore', cwd: os.tmpdir() }).unref();
+    if (term) spawn(term.bin, [...term.args, ...argv], { detached: true, stdio: 'ignore', cwd: os.tmpdir(), env: cleanEnv }).unref();
+    else spawn('/bin/bash', argv.slice(1), { detached: true, stdio: 'ignore', cwd: os.tmpdir(), env: cleanEnv }).unref();
   }
   await vscode.commands.executeCommand('workbench.action.quit');
 }
