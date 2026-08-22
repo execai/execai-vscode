@@ -16,6 +16,7 @@ Der Agent [execai](https://github.com/execai/execai-agent) in der Seitenleiste d
 - **Editor-Kontext** — die aktive Datei und die Auswahl werden an die Nachricht angehängt (`execai.attachContext`)
 - **Geänderte Dateien** — Chips unter dem Zug, ein Klick öffnet die Datei
 - **Chat-Tabs** oben im Panel, wie Datei-Tabs im Editor: alle Chats des Projekts, ein Klick zum Wechseln, «×» zum Schließen (der Chat bleibt in der Historie, ein laufender Turn läuft weiter), Ziehen zum Umsortieren
+- **Chats laufen parallel** (Agent R6.74+): Tabs wechseln, während ein Chat antwortet — der Zug läuft weiter und wird beim Zurückkommen von Anfang an abgespielt. Badges auf den Tabs: pulsierender Punkt — arbeitet, grüner Punkt — fertig und noch nicht gelesen, «?» — wartet auf deine Antwort, ⏰ — Aufwachen geplant; ein Chat, der fertig wird oder fragt, während du woanders bist, zeigt einen Toast mit **Öffnen**. Aufwachen (`schedule_wakeup`) erscheint als Zeile mit **Jetzt** / **Abbrechen** und überlebt einen Editor-Neustart
 - **Klickbare Links** — eine URL öffnet im Browser, ein Projektpfad (`internal/agent/memory.go:42`) öffnet die Datei an dieser Zeile
 - **Kopier-Buttons** — an jedem Codeblock und an der ganzen Antwort (kopiert das ursprüngliche Markdown)
 - **Stopp** bricht den laufenden Zug ab; **Neuer Chat** setzt Verlauf und Sitzungsrechte zurück

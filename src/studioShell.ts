@@ -106,6 +106,10 @@ async function ensureDarwin(app: string): Promise<boolean> {
 /** Re-checks the OS integration; call on every Studio start. */
 export async function ensureShellIntegration(): Promise<void> {
   if (!studioVersion()) return;
+  // Test runs and probes start Studio from a scratch directory; without this
+  // switch every such start would re-point the user's real «Open with ExecAI
+  // Studio» entry at the scratch copy (it happened).
+  if (process.env.EXECAI_STUDIO_NO_SHELL_INTEGRATION === '1') return;
   const w = where();
   if (!w) return;
   try {

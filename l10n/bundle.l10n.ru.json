@@ -33,7 +33,7 @@
   "{0} is missing from SHA256SUMS": "в SHA256SUMS нет {0}",
   "checksum mismatch — the file is corrupted or tampered with": "контрольная сумма не сошлась — файл повреждён или подменён",
   "could not unpack: {0}": "не распаковать: {0}",
-  "unsupported platform: {0}": "платформа не поддержана: {0}",
+  "unsupported platform: {0}": "платформа не поддерживается: {0}",
   "ExecAI: installing the agent": "ExecAI: установка агента",
   "verifying checksum": "проверяю контрольную сумму",
   "unpacking": "распаковываю",
@@ -69,7 +69,16 @@
   "The editor closes, a small window shows the installation progress, and the new version starts by itself. The previous version is kept until then.": "Редактор закроется, небольшое окно покажет ход установки, и новая версия запустится сама. Предыдущая версия сохраняется до этого момента.",
   "downloading {0} — {1}%": "скачиваю {0} — {1}%",
   "Update and restart": "Обновить и перезапустить",
-  "The editor closes, a small window downloads and installs the update with progress, and the new version starts by itself. The previous version is kept until then.": "Редактор закроется, небольшое окно скачает и установит обновление с индикацией хода, и новая версия запустится сама. Предыдущая версия сохраняется до этого момента.",
+  "The editor closes, a small window downloads and installs the update with progress, and the new version starts by itself. The previous version is kept until then.": "Редактор закроется, отдельное окно скачает и установит обновление с прогрессом, новая версия запустится сама. Прежняя версия сохраняется до конца установки.",
   "Open a project folder to follow links to its files.": "Открой папку проекта, чтобы переходить по ссылкам на её файлы.",
-  "No such file: {0}": "Файла нет: {0}"
+  "No such file: {0}": "Файла нет: {0}",
+  "Checking for ExecAI Studio updates…": "Проверяю обновления ExecAI Studio…",
+  "ExecAI Studio {0} is the latest version.": "ExecAI Studio {0} — последняя версия.",
+  "Could not reach the update channels — try again later.": "Каналы обновлений недоступны — попробуй позже.",
+  "Update checks work in ExecAI Studio only.": "Проверка обновлений работает только в ExecAI Studio.",
+  "untitled chat": "чат без названия",
+  "Open": "Открыть",
+  "Chat «{0}» finished its turn.": "Чат «{0}» закончил ход.",
+  "Chat «{0}» is waiting for your answer.": "Чат «{0}» ждёт твоего ответа.",
+  "Chat «{0}»: {1}": "Чат «{0}»: {1}"
 }

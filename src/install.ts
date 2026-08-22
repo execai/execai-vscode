@@ -32,7 +32,7 @@ export { versionAtLeast };
  * every open. Pointing at an older CLI would mean a panel whose menu entries
  * silently do nothing and an error notice on every start.
  */
-export const MIN_CLI = 'R6.58';
+export const MIN_CLI = 'R6.74';
 
 const MIRROR = 'https://storage.yandexcloud.net/execai-agent-prod/execai/stable';
 const GITHUB = 'https://github.com/execai/execai-agent/releases/latest/download';

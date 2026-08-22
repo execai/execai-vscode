@@ -170,11 +170,16 @@ async function applyUpdate(ctx: vscode.ExtensionContext, version: string, opts: 
   const restart = vscode.l10n.t('Update and restart');
   const later = vscode.l10n.t('Later');
   const skip = vscode.l10n.t('Skip this version');
+  // A toast with buttons, NOT a modal. This build's window.dialogStyle
+  // defaults to "native", and a native modal can fail to appear at all
+  // (reproduced over xrdp on Linux: no X window is created, the promise
+  // hangs forever) — the user presses «check for updates» and sees nothing.
+  // A toast renders inside the workbench DOM on every OS, stays in the
+  // notification bell if missed, and cannot strand the update flow.
   const pick = await vscode.window.showInformationMessage(
     vscode.l10n.t('ExecAI Studio {0} is out (you are on {1}). Update and restart?', version, studioVersion() ?? '?'),
-    { modal: true, detail: vscode.l10n.t('The editor closes, a small window downloads and installs the update with progress, and the new version starts by itself. The previous version is kept until then.') },
     restart, later, skip);
-  trace(`offer answered: ${pick ?? 'dismissed'}`);
+  trace(`offer answered: ${pick ?? 'dismissed'} (${opts.quiet ? 'background' : 'manual'} check)`);
   if (pick === skip) { void ctx.globalState.update(DISMISSED_KEY, version); return; }
   if (pick !== restart) return;
   void opts; // the offer is the same whether the check was manual or not
@@ -290,7 +295,17 @@ export function checkStudioUpdatesNow(ctx: vscode.ExtensionContext): void {
       vscode.l10n.t('Update checks work in ExecAI Studio only.'));
     return;
   }
-  void checkOnce(ctx, current, true);
+  // A progress notification appears the moment the button is pressed. The
+  // check itself can take up to two network timeouts (GitHub 10s + mirror
+  // 10s) — twenty silent seconds read as «the button does nothing», and the
+  // press ends up repeated or reported as a bug (it was, on Windows).
+  void vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: vscode.l10n.t('Checking for ExecAI Studio updates…'),
+    },
+    () => checkOnce(ctx, current, true),
+  );
 }
 
 /** Starts periodic update checks; does nothing outside ExecAI Studio. */

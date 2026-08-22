@@ -42,6 +42,16 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     mRestart: 'Restart the agent',
     mTerminal: 'Open execai in a terminal',
     mCheckUpdates: 'Check for Studio updates',
+    tabBusy: 'the agent is working here',
+    tabUnseen: 'finished — not read yet',
+    tabAsk: 'waiting for your answer',
+    tabWake: 'will wake up at ',
+    wakeNotice: 'will wake up at ',
+    wakeNow: 'Now',
+    wakeCancel: 'Cancel',
+    wakeCancelled: 'Wake-up cancelled.',
+    autoTurn: 'woke up: ',
+    queued: 'Queued — other chats are still answering.',
     copy: 'copy',
     copied: 'copied ✓',
     copyMsg: 'copy the answer',
@@ -96,6 +106,16 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     mRestart: 'Перезапустить агента',
     mTerminal: 'Открыть execai в терминале',
     mCheckUpdates: 'Проверить обновления Studio',
+    tabBusy: 'агент работает здесь',
+    tabUnseen: 'закончил — ещё не прочитано',
+    tabAsk: 'ждёт твоего ответа',
+    tabWake: 'проснётся в ',
+    wakeNotice: 'проснётся в ',
+    wakeNow: 'Сейчас',
+    wakeCancel: 'Отменить',
+    wakeCancelled: 'Пробуждение отменено.',
+    autoTurn: 'проснулся: ',
+    queued: 'В очереди — другие чаты ещё отвечают.',
     copy: 'копировать',
     copied: 'скопировано ✓',
     copyMsg: 'копировать ответ',
@@ -290,6 +310,19 @@ export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lan
     border-radius: 3px; line-height: 1;
   }
   #tabs .tab:hover i, #tabs .tab.active i { opacity: .6; }
+  /* Tab badges: what a chat you are not looking at is doing. */
+  #tabs .tab b { font-weight: normal; font-size: 10px; line-height: 1; flex: 0 0 auto; }
+  #tabs .tab b.busy { width: 7px; height: 7px; border-radius: 50%;
+    background: var(--vscode-progressBar-background, #0078d4); animation: exPulse 1.2s ease-in-out infinite; }
+  #tabs .tab b.unseen { width: 7px; height: 7px; border-radius: 50%; background: var(--vscode-charts-green, #3fb950); }
+  #tabs .tab b.ask { color: var(--vscode-inputValidation-warningBorder, #b89500); font-weight: bold; }
+  #tabs .tab b.wake { opacity: .8; }
+  @keyframes exPulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+  .wake { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .wake button { font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--vscode-button-border, transparent);
+    background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+  .msg.user.auto { opacity: .85; font-style: italic; }
   #tabs .tab i:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); }
   #tabs .tab.dragging { opacity: .5; }
   #tabs .tab.dropbefore { box-shadow: inset 2px 0 0 var(--vscode-focusBorder); }
@@ -523,6 +556,24 @@ let curThinking = null;   // current reasoning block
 let tools = {};           // id → card elements
 let attached = [];        // [{path, label, thumb?}] — "+", drag&drop, paste
 let isStudio = false;     // set by the extension inside ExecAI Studio
+// Per-chat badges from the extension (busy / unseen / asking / wake).
+let chatFlags = {};
+function clock(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso || '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+// A line under the log about a scheduled wake-up, with Now / Cancel.
+function wakeLine(at, reason) {
+  const w = el('div', 'notice wake');
+  w.appendChild(el('span', '', '\u{1F319} ' + T.wakeNotice + clock(at) + (reason ? ' \u2014 ' + reason : '')));
+  const now = el('button', '', T.wakeNow);
+  now.onclick = () => vscode.postMessage({ type: 'agent_command', name: 'wake_now', value: '' });
+  const cancel = el('button', '', T.wakeCancel);
+  cancel.onclick = () => vscode.postMessage({ type: 'agent_command', name: 'cancel_wakeup', value: '' });
+  w.appendChild(now); w.appendChild(cancel);
+  return w;
+}
 
 function renderChips() {
   chipsBox.innerHTML = '';
@@ -602,6 +653,11 @@ function renderTabs() {
     t.draggable = true;
     t.dataset.chat = c.id;
     t.appendChild(el('span', '', label));
+    const f = Object.assign({}, c.busy ? { busy: true } : {}, c.wake ? { wake: c.wake } : {}, chatFlags[c.id] || {});
+    if (f.asking) { const b = el('b', 'ask', '?'); b.title = T.tabAsk; t.appendChild(b); }
+    else if (f.busy) { const b = el('b', 'busy', ''); b.title = T.tabBusy; t.appendChild(b); }
+    else if (f.unseen && !c.active) { const b = el('b', 'unseen', ''); b.title = T.tabUnseen; t.appendChild(b); }
+    if (f.wake) { const b = el('b', 'wake', '\u23f0'); b.title = T.tabWake + clock(f.wake); t.appendChild(b); }
     const x = el('i', '', '\u00d7');
     x.title = T.closeTab;
     const close = (e) => {
@@ -1173,7 +1229,32 @@ window.addEventListener('message', (ev) => {
       scroll();
       break;
     }
+    case 'chat_flags':
+      chatFlags = e.flags || {};
+      renderTabs();
+      break;
+    case 'auto_user': {
+      clearEmpty();
+      log.appendChild(el('div', 'msg user auto', '\u{1F319} ' + T.autoTurn + (e.text || '')));
+      scroll();
+      break;
+    }
+    case 'wakeup':
+      log.appendChild(wakeLine(e.at || '', e.text || ''));
+      scroll();
+      break;
+    case 'wakeup_cancelled':
+      for (const w of log.querySelectorAll('.wake')) w.remove();
+      log.appendChild(el('div', 'notice', T.wakeCancelled));
+      scroll();
+      break;
+    case 'queued':
+      log.appendChild(el('div', 'notice', T.queued));
+      scroll();
+      break;
     case 'chat_reset':
+      // Switching chats: the busy state belongs to the chat we are leaving.
+      clearBusy();
       log.innerHTML = '';
       tools = {}; curAssistant = null; curThinking = null;
       log.appendChild(el('div', 'notice', T.newChatNotice));
@@ -1194,6 +1275,9 @@ window.addEventListener('message', (ev) => {
       renderTabs();
       break;
     case 'chat_loaded': {
+      // The chat we are leaving may still be busy — that is its state, not ours.
+      // If the loaded chat is busy, the agent replays its turn right after this.
+      clearBusy();
       log.innerHTML = '';
       tools = {}; curAssistant = null; curThinking = null;
       for (const m of e.msgs || []) {
@@ -1214,6 +1298,7 @@ window.addEventListener('message', (ev) => {
         }
       }
       log.appendChild(el('div', 'notice', T.chatRestored));
+      if (e.at) log.appendChild(wakeLine(e.at, e.text || ''));
       scroll();
       for (const a of log.querySelectorAll('.msg.assistant')) decorate(a);
       refreshTabs();

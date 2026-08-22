@@ -23,6 +23,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private status: vscode.StatusBarItem;
   private pending: AgentEvent[] = []; // events queued before the webview opened
   private lastState: AgentEvent | null = null; // state for the pickers
+  // Which chat the panel shows. The agent runs several chats at once and tags
+  // every event with its chat; only the active one is rendered, the rest only
+  // move the tab badges (and raise a toast when they need the user).
+  private activeChat: string | null = null;
+  private flags = new Map<string, { busy?: boolean; unseen?: boolean; asking?: boolean; wake?: string }>();
+  private chatLabels = new Map<string, string>();
 
   constructor(private readonly ctx: vscode.ExtensionContext) {
     this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
@@ -101,8 +107,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private fromAgent(e: AgentEvent): void {
+    if (e.type === 'chats') {
+      for (const c of e.chats || []) this.chatLabels.set(c.id, c.label || '');
+    }
+    if (e.chat) {
+      // chat_loaded / chat_reset say which chat the panel shows from now on.
+      if (e.type === 'chat_loaded' || e.type === 'chat_reset') {
+        this.activeChat = e.chat;
+        const f = this.flag(e.chat);
+        f.unseen = false; f.asking = false;
+        this.pushFlags();
+      }
+      this.noteFlags(e);
+      if (e.chat !== this.activeChat) {
+        this.backgroundEvent(e);
+        return;
+      }
+    }
     switch (e.type) {
       case 'ready':
+        this.activeChat = null;
+        this.flags.clear();
         this.status.text = this.statusMain = `ExecAI: ${e.model ?? '?'} · ${e.source ?? ''}`;
         // Ask for state right away: the model/source pickers must not wait for a click.
         this.client?.sendCommand('state');
@@ -171,6 +196,65 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else this.pending.push(e as AgentEvent);
   }
 
+  private flag(chat: string) {
+    let f = this.flags.get(chat);
+    if (!f) { f = {}; this.flags.set(chat, f); }
+    return f;
+  }
+
+  /** Tab badges for every chat — the webview draws them on the strip. */
+  private pushFlags(): void {
+    const flags: Record<string, unknown> = {};
+    for (const [id, f] of this.flags) flags[id] = f;
+    this.toWebview({ type: 'chat_flags', flags });
+  }
+
+  /** Keeps per-chat state in step with the stream, active chat included. */
+  private noteFlags(e: AgentEvent): void {
+    if (!e.chat) return;
+    const f = this.flag(e.chat);
+    let changed = true;
+    switch (e.type) {
+      case 'turn_start': f.busy = true; f.asking = false; break;
+      case 'done': f.busy = false; f.asking = false; if (e.chat !== this.activeChat) f.unseen = true; break;
+      case 'ask': case 'ask_user': f.asking = true; break;
+      case 'wakeup': f.wake = e.at || ''; break;
+      case 'wakeup_cancelled': f.wake = ''; break;
+      case 'chat_loaded': f.busy = !!e.busy; f.wake = e.at || ''; break;
+      default: changed = false;
+    }
+    if (changed) this.pushFlags();
+  }
+
+  private chatName(id: string): string {
+    return (this.chatLabels.get(id) || '').trim() || vscode.l10n.t('untitled chat');
+  }
+
+  /** An event from a chat that is not on screen: badges, plus a toast when it needs a human. */
+  private backgroundEvent(e: AgentEvent): void {
+    const open = vscode.l10n.t('Open');
+    const show = (msg: string) => {
+      void vscode.window.showInformationMessage(msg, open).then((p) => {
+        if (p !== open || !e.chat) return;
+        this.view?.show?.(true);
+        this.client?.sendCommand('load_chat', e.chat);
+      });
+    };
+    switch (e.type) {
+      case 'done':
+        if (e.text === 'stopped') break;
+        show(vscode.l10n.t('Chat «{0}» finished its turn.', this.chatName(e.chat || '')));
+        break;
+      case 'ask':
+      case 'ask_user':
+        show(vscode.l10n.t('Chat «{0}» is waiting for your answer.', this.chatName(e.chat || '')));
+        break;
+      case 'error':
+        show(vscode.l10n.t('Chat «{0}»: {1}', this.chatName(e.chat || ''), e.text || ''));
+        break;
+    }
+  }
+
   // ── human actions ───────────────────────────────────────────────
 
   private fromWebview(m: { type: string; text?: string; id?: string; value?: string; path?: string; line?: string; files?: string[] }): void {
@@ -187,7 +271,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         if (!this.client?.alive) this.startAgent();
         const ctx = this.editorContext() ?? {};
         if (m.files?.length) ctx.files = m.files;
-        this.client?.sendUser(m.text || '', ctx);
+        this.client?.sendUser(m.text || '', ctx, this.activeChat ?? undefined);
         // The auto-attached context must be visible: the agent knowing about a
         // file the chat never showed reads as spooky action at a distance —
         // "the AI sees my file but the panel shows nothing".
@@ -243,6 +327,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
         if (c.name === 'connect') { void this.connectFlow(c.value || ''); break; }
         if (c.name === 'set_max_iterations' && !c.value) { void this.maxIterFlow(); break; }
+        if (c.name === 'cancel_wakeup' || c.name === 'wake_now') {
+          this.client?.sendCommand(c.name, c.value || this.activeChat || '');
+          break;
+        }
         this.client?.sendCommand(c.name || '', c.value);
         break;
       }
@@ -259,7 +347,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.client?.sendAnswer(m.id || '', m.value || '');
         break;
       case 'stop':
-        this.client?.stop();
+        this.client?.stop(this.activeChat ?? undefined);
         break;
       case 'new_chat':
         this.client?.newChat();

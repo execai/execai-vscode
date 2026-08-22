@@ -16,6 +16,7 @@ The [execai](https://github.com/execai/execai-agent) agent in your editor sideba
 - **Editor context** — the active file and selection are attached to your message (`execai.attachContext`)
 - **Changed files** — chips under the turn, click to open the file
 - **Chat tabs** at the top of the panel, the way an editor shows open files: every chat of this project, one click to switch, «×» to close (the chat stays in history and a running turn keeps going), drag to reorder
+- **Chats run in parallel** (agent R6.74+): switch tabs while a chat is answering — the turn keeps running and is replayed from the start when you come back. Badges on tabs: a pulsing dot — working, a green dot — finished and not read yet, «?» — waiting for your answer, ⏰ — a wake-up is scheduled; a chat that finishes or asks while you are elsewhere raises a toast with **Open**. Wake-ups (`schedule_wakeup`) show a line with **Now** / **Cancel** and survive an editor restart
 - **Clickable links** — a URL opens in the browser, a project path (`internal/agent/memory.go:42`) opens the file at that line
 - **Copy buttons** — one on every code block, one on the answer as a whole (it copies the original markdown)
 - **Stop** ends the current turn; **New chat** resets the history and the session permissions

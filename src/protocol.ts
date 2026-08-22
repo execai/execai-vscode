@@ -22,11 +22,17 @@ export interface NamedItem {
   id: string;
   label?: string;
   active?: boolean;
+  /** chats: a turn is running in this chat */
+  busy?: boolean;
+  /** chats: a wake-up is scheduled (RFC 3339) */
+  wake?: string;
 }
 
 /** An event from the agent. Which fields are set depends on the event type — see internal/ide. */
 export interface AgentEvent {
   type: string;
+  /** The chat this event belongs to; absent on process-wide events (state, chats). */
+  chat?: string;
   version?: string;
   protocol?: number;
   model?: string;
@@ -55,6 +61,10 @@ export interface AgentEvent {
   effort?: string;
   max_iter?: number;
   msgs?: { role: string; tool?: string; text: string }[];
+  /** chat_loaded: a turn is still running in the loaded chat */
+  busy?: boolean;
+  /** wakeup / chat_loaded: when the chat wakes up (RFC 3339) */
+  at?: string;
 }
 
 export interface EditorCtx {
@@ -153,20 +163,21 @@ export class AgentClient {
     this.proc.stdin.write(JSON.stringify(obj) + '\n');
   }
 
-  sendUser(text: string, context?: EditorCtx): void {
-    this.send({ type: 'user', text, context });
+  /** chat — which chat the message targets; the agent falls back to the active one. */
+  sendUser(text: string, context?: EditorCtx, chat?: string): void {
+    this.send({ type: 'user', text, context, chat });
   }
   sendAnswer(id: string, value: string): void {
     this.send({ type: 'answer', id, value });
   }
-  stop(): void {
-    this.send({ type: 'stop' });
+  stop(chat?: string): void {
+    this.send({ type: 'stop', chat });
   }
   newChat(): void {
     this.send({ type: 'new_chat' });
   }
-  sendCommand(name: string, value?: string, extra?: { key?: string; base_url?: string }): void {
-    this.send({ type: 'command', name, value, ...extra });
+  sendCommand(name: string, value?: string, extra?: { key?: string; base_url?: string }, chat?: string): void {
+    this.send({ type: 'command', name, value, ...extra, chat });
   }
   dispose(): void {
     if (this.proc) {
