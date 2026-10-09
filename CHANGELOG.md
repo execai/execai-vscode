@@ -3,6 +3,23 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.33 — 2026-10-09
+
+### Fixed
+
+- **The Claude Code CLI source could only read.** In `claude -p` mode Claude
+  Code has nobody to ask, so it silently refused every edit and command that
+  `~/.claude/settings.json` did not allow in advance. With agent R6.85 those
+  requests come to the panel's usual approval buttons, under the same security
+  level as the agent's own tools, and Claude's tool calls show up as tool cards
+  with changed files in the file chips.
+- **Old models over claude-cli.** The agent used the first `claude` on PATH —
+  often a stale global install — instead of the fresh Claude Code bundled with
+  the editor. R6.85 picks the newest install and lists Opus 5.5, Sonnet 5.5
+  and Fable 5.1.
+
+The extension now requires agent R6.85 and offers to download it on start.
+
 ## 0.2.29 — 2026-08-20
 
 ### Fixed
