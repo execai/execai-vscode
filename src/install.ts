@@ -31,13 +31,15 @@ export { versionAtLeast };
  * the permission bypasses; R6.58 added `resume_last`, which the panel calls on
  * every open; R6.74 tags every event with its chat; R6.85 routes Claude Code's
  * edits and commands through the panel's approvals — an older agent leaves the
- * claude-cli source read-only. Pointing at an older CLI would mean a panel
- * whose menu entries silently do nothing and an error notice on every start.
+ * claude-cli source read-only; R6.88 hands attached images and screenshots
+ * to claude-cli and codex-cli instead of a bare "[image]" placeholder.
+ * Pointing at an older CLI would mean a panel whose menu entries silently do
+ * nothing and an error notice on every start.
  *
  * Raising this is also how a fix in the agent reaches the panel: an agent at
  * or above the minimum is used as is and never offered an update.
  */
-export const MIN_CLI = 'R6.85';
+export const MIN_CLI = 'R6.88';
 
 const MIRROR = 'https://storage.yandexcloud.net/execai-agent-prod/execai/stable';
 const GITHUB = 'https://github.com/execai/execai-agent/releases/latest/download';

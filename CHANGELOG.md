@@ -3,6 +3,18 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.34 — 2026-10-10
+
+### Fixed
+
+- **Screenshots and images were invisible over Claude Code CLI and Codex
+  CLI.** The agent passed the conversation to them as text, with a bare
+  `[image]` where the picture was, so Claude went looking for the file itself
+  and answered about whatever image it found first. With agent R6.88 attached
+  and pasted images reach both CLIs as real images.
+
+The extension now requires agent R6.88 and offers to download it on start.
+
 ## 0.2.33 — 2026-10-09
 
 ### Fixed
