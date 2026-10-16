@@ -39,7 +39,7 @@ export { versionAtLeast };
  * Raising this is also how a fix in the agent reaches the panel: an agent at
  * or above the minimum is used as is and never offered an update.
  */
-export const MIN_CLI = 'R6.88';
+export const MIN_CLI = 'R6.91';
 
 const MIRROR = 'https://storage.yandexcloud.net/execai-agent-prod/execai/stable';
 const GITHUB = 'https://github.com/execai/execai-agent/releases/latest/download';

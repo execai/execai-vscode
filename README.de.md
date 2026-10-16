@@ -22,7 +22,7 @@ Der Agent [execai](https://github.com/execai/execai-agent) in der Seitenleiste d
 - **Stopp** bricht den laufenden Zug ab; **Neuer Chat** setzt Verlauf und Sitzungsrechte zurück
 - **Notausgang Terminal** — der Befehl „ExecAI: Im Terminal öffnen“ liefert das vollständige TUI
 
-Quellen (ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…), Modelle, Gedächtnis und Rechte werden in der CLI selbst konfiguriert — die Erweiterung nutzt deine aktuelle Konfiguration.
+Quellen (ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…), Modelle, Gedächtnis und Rechte werden in der CLI selbst konfiguriert — die Erweiterung nutzt deine aktuelle Konfiguration. Eine Quelle kann auch **dein eigener Endpoint** sein — jede OpenAI- oder Anthropic-kompatible Adresse (LM Studio, vLLM, LiteLLM, ein Firmen-Gateway): **Quelle verbinden → Eigener Anbieter** im `>_`-Menü fragt nach Name, Schnittstellentyp, Adresse und Key. Die Modelllisten kommen von den Anbietern selbst.
 
 ## Oberflächensprachen
 

@@ -22,7 +22,7 @@
 - **停止** 中断当前回合；**新对话** 重置历史与会话级权限
 - **终端后路** —— 「ExecAI: 在终端中打开」命令可获得完整 TUI
 
-数据源（ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…）、模型、记忆和权限都在 CLI 中配置，扩展直接使用你当前的配置。
+数据源（ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…）、模型、记忆和权限都在 CLI 中配置，扩展直接使用你当前的配置。数据源也可以是 **你自己的端点** —— 任意 OpenAI 或 Anthropic 兼容地址（LM Studio、vLLM、LiteLLM、公司网关）：在 `>_` 菜单中选择 **连接来源 → 自定义提供商**，填写名称、接口类型、地址和密钥。模型列表来自提供商本身。
 
 ## 界面语言
 

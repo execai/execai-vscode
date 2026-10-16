@@ -3,6 +3,29 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.35 — 2026-10-16
+
+### Added
+
+- **Custom provider.** *Connect a source → Custom provider* connects any
+  endpoint that speaks the OpenAI (`/chat/completions`) or the Anthropic
+  (`/v1/messages`) protocol — a local LM Studio, vLLM or llama.cpp server,
+  LiteLLM, a corporate gateway, DeepSeek, Groq. The panel asks for a name,
+  the interface type, the address, the key (optional) and, for endpoints
+  without a model list, the model IDs. The source then shows up under its own
+  name in the source picker.
+
+### Changed
+
+- **Every model list comes from the provider.** With agent R6.91 nothing is
+  built into the agent any more: Z.ai, Kimi, Moonshot, Anthropic, OpenAI,
+  OpenRouter and Ollama are asked for their models with your key, Claude Code
+  and Codex CLI are asked directly. New models of your plan appear the same
+  day, with the provider's own names (Codex now offers GPT-5.6 Sol/Terra/Luna
+  instead of the stale GPT-5/o3/o4-mini).
+
+The extension now requires agent R6.91 and offers to download it on start.
+
 ## 0.2.34 — 2026-10-10
 
 ### Fixed

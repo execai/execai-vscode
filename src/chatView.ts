@@ -418,6 +418,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   /** Connecting a source: the key is asked for with an editor input box. */
   private async connectFlow(provider: string): Promise<void> {
+    if (provider === 'custom') { await this.customProviderFlow(); return; }
     const noKey = provider === 'claude-cli' || provider === 'codex-cli';
     let key: string | undefined;
     if (!noKey) {
@@ -433,6 +434,83 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (key === undefined && provider !== 'ollama') return;
     }
     this.client?.sendCommand('connect', provider, { key: key || '' });
+  }
+
+  /**
+   * A custom provider: any endpoint that speaks the OpenAI or the Anthropic
+   * protocol. Asked in the same order as `/connect custom` in the terminal —
+   * name, protocol, address, key — plus the model IDs for an endpoint that
+   * has no /models route. Esc at any step cancels; nothing is sent.
+   */
+  private async customProviderFlow(): Promise<void> {
+    const title = (step: number) => vscode.l10n.t('Custom provider ({0}/5)', step);
+    const name = await vscode.window.showInputBox({
+      title: title(1),
+      prompt: vscode.l10n.t('Name — it becomes the source id, e.g. LM Studio, vLLM, deepseek'),
+      placeHolder: 'LM Studio',
+      ignoreFocusOut: true,
+      validateInput: (t) =>
+        /[a-z0-9]/i.test(t) ? null : vscode.l10n.t('use latin letters or digits'),
+    });
+    if (name === undefined) return;
+
+    const api = await vscode.window.showQuickPick(
+      [
+        {
+          label: vscode.l10n.t('OpenAI-compatible'),
+          description: '…/chat/completions',
+          detail: 'LM Studio, vLLM, llama.cpp, LiteLLM, DeepSeek, Groq, Together, Mistral…',
+          value: 'openai' as const,
+        },
+        {
+          label: vscode.l10n.t('Anthropic-compatible'),
+          description: '…/v1/messages',
+          detail: vscode.l10n.t('LiteLLM, Claude gateways, MiniMax, DeepSeek…'),
+          value: 'anthropic' as const,
+        },
+      ],
+      { title: title(2), placeHolder: vscode.l10n.t('Interface type'), ignoreFocusOut: true },
+    );
+    if (!api) return;
+
+    const baseUrl = await vscode.window.showInputBox({
+      title: title(3),
+      prompt: api.value === 'anthropic'
+        ? vscode.l10n.t('Server address without /v1/messages, e.g. https://llm.corp.local')
+        : vscode.l10n.t('Server address, e.g. http://localhost:1234/v1 or https://api.deepseek.com'),
+      placeHolder: api.value === 'anthropic' ? 'https://llm.corp.local' : 'http://localhost:1234/v1',
+      ignoreFocusOut: true,
+      validateInput: (t) => {
+        const v = t.trim();
+        if (!v) return vscode.l10n.t('an address is required');
+        return /^(https?:\/\/)?[^\s/]+(\/\S*)?$/i.test(v) ? null : vscode.l10n.t('not an http(s) address');
+      },
+    });
+    if (baseUrl === undefined) return;
+
+    const key = await vscode.window.showInputBox({
+      title: title(4),
+      prompt: vscode.l10n.t('API key — leave empty if the server needs none. Stored on this machine only'),
+      password: true,
+      ignoreFocusOut: true,
+    });
+    if (key === undefined) return;
+
+    const models = await vscode.window.showInputBox({
+      title: title(5),
+      prompt: vscode.l10n.t("Model IDs separated by commas — leave empty to take the server's own list"),
+      placeHolder: 'qwen3-coder, llama-4',
+      ignoreFocusOut: true,
+    });
+    if (models === undefined) return;
+
+    this.client?.sendCommand('connect', 'custom', {
+      label: name.trim(),
+      api: api.value,
+      base_url: baseUrl.trim(),
+      key: key.trim(),
+      models: models.split(',').map((m) => m.trim()).filter(Boolean),
+    });
   }
 
   /** Iteration limit — a plain number. */

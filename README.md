@@ -22,7 +22,7 @@ The [execai](https://github.com/execai/execai-agent) agent in your editor sideba
 - **Stop** ends the current turn; **New chat** resets the history and the session permissions
 - **Terminal escape hatch** — the "ExecAI: Open in a terminal" command gives you the full TUI
 
-Sources (ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…), models, memory and permissions are all configured in the CLI itself — the extension uses your current configuration.
+Sources (ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…), models, memory and permissions are all configured in the CLI itself — the extension uses your current configuration. A source can also be **your own endpoint** — any OpenAI- or Anthropic-compatible address (LM Studio, vLLM, LiteLLM, a corporate gateway): **Connect a source → Custom provider** in the `>_` menu asks for its name, interface type, address and key. Model lists come from the providers themselves.
 
 ## Interface languages
 

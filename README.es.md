@@ -22,7 +22,7 @@ El agente [execai](https://github.com/execai/execai-agent) en la barra lateral d
 - **Detener** corta el turno actual; **Nuevo chat** reinicia el historial y los permisos de sesión
 - **Salida de emergencia al terminal** — el comando «ExecAI: Abrir en un terminal» te da el TUI completo
 
-Las fuentes (ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…), los modelos, la memoria y los permisos se configuran en la propia CLI: la extensión usa tu configuración actual.
+Las fuentes (ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…), los modelos, la memoria y los permisos se configuran en la propia CLI: la extensión usa tu configuración actual. Una fuente también puede ser **tu propio endpoint**: cualquier dirección compatible con OpenAI o Anthropic (LM Studio, vLLM, LiteLLM, una pasarela corporativa). **Conectar una fuente → Proveedor propio** en el menú `>_` pide nombre, tipo de interfaz, dirección y clave. Las listas de modelos vienen de los propios proveedores.
 
 ## Idiomas de la interfaz
 

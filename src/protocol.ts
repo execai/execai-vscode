@@ -81,6 +81,18 @@ export interface EditorCtx {
  * break silently: chunks arrive split at arbitrary offsets, and "almost JSON"
  * must wait for its tail instead of blowing up.
  */
+/** Extra fields of the connect command. A custom provider carries its
+ * protocol, name, optional model IDs and extra headers; built-in providers
+ * only a key and, rarely, their own base URL. */
+export interface ConnectExtra {
+  key?: string;
+  base_url?: string;
+  api?: 'openai' | 'anthropic';
+  label?: string;
+  models?: string[];
+  headers?: Record<string, string>;
+}
+
 export class LineParser {
   private buf = '';
 
@@ -176,7 +188,7 @@ export class AgentClient {
   newChat(): void {
     this.send({ type: 'new_chat' });
   }
-  sendCommand(name: string, value?: string, extra?: { key?: string; base_url?: string }, chat?: string): void {
+  sendCommand(name: string, value?: string, extra?: ConnectExtra, chat?: string): void {
     this.send({ type: 'command', name, value, ...extra, chat });
   }
   dispose(): void {

@@ -80,5 +80,18 @@
   "Open": "Открыть",
   "Chat «{0}» finished its turn.": "Чат «{0}» закончил ход.",
   "Chat «{0}» is waiting for your answer.": "Чат «{0}» ждёт твоего ответа.",
-  "Chat «{0}»: {1}": "Чат «{0}»: {1}"
+  "Chat «{0}»: {1}": "Чат «{0}»: {1}",
+  "Custom provider ({0}/5)": "Свой провайдер ({0}/5)",
+  "Name — it becomes the source id, e.g. LM Studio, vLLM, deepseek": "Имя — из него получится id источника, например LM Studio, vLLM, deepseek",
+  "use latin letters or digits": "нужны латинские буквы или цифры",
+  "OpenAI-compatible": "OpenAI-совместимый",
+  "Anthropic-compatible": "Anthropic-совместимый",
+  "LiteLLM, Claude gateways, MiniMax, DeepSeek…": "LiteLLM, шлюзы к Claude, MiniMax, DeepSeek…",
+  "Interface type": "Тип интерфейса",
+  "Server address without /v1/messages, e.g. https://llm.corp.local": "Адрес сервера без /v1/messages, например https://llm.corp.local",
+  "Server address, e.g. http://localhost:1234/v1 or https://api.deepseek.com": "Адрес сервера, например http://localhost:1234/v1 или https://api.deepseek.com",
+  "an address is required": "нужен адрес",
+  "not an http(s) address": "это не http(s)-адрес",
+  "API key — leave empty if the server needs none. Stored on this machine only": "API-ключ — оставь пустым, если серверу он не нужен. Хранится только на этой машине",
+  "Model IDs separated by commas — leave empty to take the server's own list": "ID моделей через запятую — оставь пустым, чтобы взять список у сервера"
 }
