@@ -3,6 +3,67 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.36 — 2026-11-02
+
+### Added
+
+- **Tasks from the web in the panel.** With an agent that accepts tasks from
+  the site (`execai ide` reports its inbox), a task started on execai.ru or
+  from the phone opens as a new chat right here: its tab carries 🌐, the
+  first message reads *From the web: …* instead of the 🌙 of a wake-up, and
+  a toast *A task came in from the web: …* has an **Open** button. The whole
+  turn streams in the panel, and the chat can be continued like any other.
+- **Who accepts tasks from the web.** The panel menu and the status bar
+  show it: this window, the background `execai serve` (with an **Accept
+  here** button that takes over), another editor window, no plan (running
+  tasks from the web needs the Work or Max plan — with a link to the plans),
+  turned off, or not signed in (the line leads to the usual sign-in).
+- **Project binding.** *Project: not bound* (or *Project: Shop*) in the panel menu picks
+  one of your ExecAI projects for this folder, *Unbind the project* undoes
+  it. Without a binding the site has nowhere to send tasks for the folder,
+  so the panel suggests it once per project.
+- **Permission questions answered on the site.** A task from the web asks
+  for permissions both here and on the site; whichever answers first wins.
+  A question answered on the site is taken back here with a note, and so is
+  one withdrawn because the task stopped.
+
+- **Subagents in the panel.** With an agent that runs subagents, an
+  **Agents** block above the input shows who is doing what: a state icon,
+  the title, the iteration (*3/15*), the last tool and how long it has been
+  running, with **Stop** on the ones still going (it folds away with a
+  click). A click on a row opens what that subagent has done so far in a
+  read-only 🤖 tab that follows it while it works; *Back to the chat* returns.
+  The tab of the parent chat carries *2▶* while its subagents work, and a
+  permission question from a subagent is labelled with its name — in the
+  panel and in the toast of a chat that is not on screen.
+- **The same panel in a browser.** `npm run build:panel` builds
+  `dist/panel-browser.en.html` and `dist/panel-browser.ru.html`: the very
+  same chat page for `execai ui`, which serves it on 127.0.0.1. There the
+  page talks to the agent over HTTP (`POST /in`, server-sent events from
+  `/events`, files through `POST /upload`), draws its own header instead of
+  the status bar, toasts in a notification strip (and as desktop
+  notifications when allowed), project binding, connecting a source and the
+  iteration limit as dialogs inside the page, and follows the light or dark
+  system theme. Opening files, the terminal and restarting the agent are
+  editor things and are hidden there. Each browser tab follows the chat
+  switches it made itself.
+
+### Changed
+
+- The routing between the agent and the panel (which chat is on screen,
+  tab badges, toasts, the dialogs) moved into one module that the extension
+  and the browser page share, so the two cannot drift apart. Nothing
+  changes in how the editor panel behaves.
+
+### Fixed
+
+- The *?* badge on a chat tab that waits for an answer was drawn as a
+  framed box: it picked up the style of the question card.
+
+Against an older agent the panel looks exactly as before: nothing about
+tasks from the web or subagents is shown until the agent reports it. The
+minimum agent version is unchanged.
+
 ## 0.2.35 — 2026-10-16
 
 ### Added

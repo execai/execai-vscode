@@ -1,8 +1,11 @@
 // The sidebar chat: a webview plus the agent process.
 //
-// All conversation logic lives in the CLI (`execai ide`); this file only
-// translates: agent events → webview, human actions → agent. The webview can
-// reach nothing except postMessage back here, exactly as it should be.
+// All conversation logic lives in the CLI (`execai ide`); the panel only
+// translates: agent events → webview, human actions → agent. The translation
+// itself is PanelCore (panelCore.ts), shared with the browser page of
+// `execai ui`; this file owns the editor side — the agent process, QuickPicks,
+// toasts, the status bar, files. The webview can reach nothing except
+// postMessage back here, exactly as it should be.
 //
 // User-visible strings go through vscode.l10n.t(): English is the base and
 // l10n/bundle.l10n.<lang>.json carries the translations.
@@ -10,7 +13,9 @@
 import * as vscode from 'vscode';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { AgentClient, AgentEvent, NamedItem, PROTOCOL } from './protocol';
+import { AgentEvent, NamedItem, Workspace } from './protocol';
+import { AgentClient } from './agentClient';
+import { PanelCore, PanelHost, PanelMessage } from './panelCore';
 import { resolveBinary, ensureBinary, MIN_CLI } from './install';
 import { chatHtml } from './webviewHtml';
 import { studioVersion } from './studioUpdate';
@@ -22,13 +27,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private client: AgentClient | null = null;
   private status: vscode.StatusBarItem;
   private pending: AgentEvent[] = []; // events queued before the webview opened
-  private lastState: AgentEvent | null = null; // state for the pickers
-  // Which chat the panel shows. The agent runs several chats at once and tags
-  // every event with its chat; only the active one is rendered, the rest only
-  // move the tab badges (and raise a toast when they need the user).
-  private activeChat: string | null = null;
-  private flags = new Map<string, { busy?: boolean; unseen?: boolean; asking?: boolean; wake?: string }>();
-  private chatLabels = new Map<string, string>();
+  private uiReady = false;
+  // Routing, tab badges, toasts and dialogs: shared with the browser page of
+  // `execai ui` (panelCore.ts). This class supplies the editor side of it.
+  private readonly core: PanelCore;
 
   constructor(private readonly ctx: vscode.ExtensionContext) {
     this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
@@ -36,6 +38,54 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.status.command = 'execai.chat.focus';
     this.status.show();
     ctx.subscriptions.push(this.status);
+    this.core = new PanelCore(this.editorHost());
+  }
+
+  /** The chat on screen (kept by the core). */
+  get activeChat(): string | null { return this.core.activeChat; }
+  set activeChat(v: string | null) { this.core.activeChat = v; }
+  get wsWaiters(): ((list: Workspace[]) => void)[] { return this.core.wsWaiters; }
+  private get lastState(): AgentEvent | null { return this.core.lastState; }
+
+  /** What the shared panel logic gets from VS Code. */
+  private editorHost(): PanelHost {
+    return {
+      l10n: vscode.l10n,
+      agent: () => this.client,
+      startAgent: () => this.startAgent(),
+      hasFolder: () => !!vscode.workspace.workspaceFolders?.length,
+      post: (e) => this.toWebview(e),
+      uiReady: () => {
+        this.uiReady = true;
+        for (const e of this.pending) void this.view?.webview.postMessage(e);
+        this.pending = [];
+      },
+      status: (text, tooltip) => {
+        this.status.text = text;
+        this.status.tooltip = tooltip;
+      },
+      info: (message, ...actions) => vscode.window.showInformationMessage(message, ...actions),
+      warn: (message) => { void vscode.window.showWarningMessage(message); },
+      reveal: () => this.view?.show?.(true),
+      openExternal: (url) => { void vscode.env.openExternal(vscode.Uri.parse(url)); },
+      // The webview cannot rely on navigator.clipboard in every host — the
+      // extension side always can.
+      copy: (text) => { void vscode.env.clipboard.writeText(text); },
+      memo: {
+        get: <T>(key: string, def: T) => this.ctx.workspaceState.get<T>(key, def),
+        set: (key, value) => { void this.ctx.workspaceState.update(key, value); },
+      },
+      pick: (items, opts) => vscode.window.showQuickPick(items, opts),
+      input: (opts) => vscode.window.showInputBox(opts),
+      resumeLastChat: () => vscode.workspace.getConfiguration('execai').get<boolean>('resumeLastChat', true),
+      editorContext: () => this.editorContext(),
+      pickFiles: () => { void this.pickFiles(); },
+      attachPaths: (paths) => { void this.attachPaths(paths); },
+      pasteBlob: (name, dataURL) => { void this.saveBlobAndAttach(name, dataURL); },
+      openFile: (p, line) => { void this.openFile(p, line); },
+      openTerminal: () => { void vscode.commands.executeCommand('execai.openTerminal'); },
+      checkUpdates: () => { void vscode.commands.executeCommand('execai.checkUpdates'); },
+    };
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -80,12 +130,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     this.client?.dispose();
+    this.clearInbox(); // a new process reports its own inbox, or none at all
     this.client = new AgentClient({
       binary: bin,
       cwd: ws.uri.fsPath,
       maxIterations: cfg.get<number>('maxIterations') || 0,
       onEvent: (e) => this.fromAgent(e),
       onExit: (code, stderrTail) => {
+        this.clearInbox(); // nobody listens for this window any more
         this.status.text = vscode.l10n.t('ExecAI: agent stopped');
         this.toWebview({
           type: 'agent_exit',
@@ -98,277 +150,32 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.status.text = vscode.l10n.t('ExecAI: starting…');
   }
 
-  /** Status bar without the "turn…" suffix. Kept as a field, not scraped back
-   *  out of the text: the suffix is translated, and a regex over it would only
-   *  match one language. */
-  private statusMain = 'ExecAI';
-  private statusBase(): string {
-    return this.statusMain;
+  clearInbox(): void {
+    this.core.clearInbox();
+  }
+
+  /** "Project: …" in the panel menu: pick one of the account's projects for this folder. */
+  bindFlow(): Promise<void> {
+    return this.core.bindFlow();
+  }
+
+  gotWorkspaces(list: Workspace[]): void {
+    this.core.gotWorkspaces(list);
   }
 
   private fromAgent(e: AgentEvent): void {
-    if (e.type === 'chats') {
-      for (const c of e.chats || []) this.chatLabels.set(c.id, c.label || '');
-    }
-    if (e.chat) {
-      // chat_loaded / chat_reset say which chat the panel shows from now on.
-      if (e.type === 'chat_loaded' || e.type === 'chat_reset') {
-        this.activeChat = e.chat;
-        const f = this.flag(e.chat);
-        f.unseen = false; f.asking = false;
-        this.pushFlags();
-      }
-      this.noteFlags(e);
-      if (e.chat !== this.activeChat) {
-        this.backgroundEvent(e);
-        return;
-      }
-    }
-    switch (e.type) {
-      case 'ready':
-        this.activeChat = null;
-        this.flags.clear();
-        this.status.text = this.statusMain = `ExecAI: ${e.model ?? '?'} · ${e.source ?? ''}`;
-        // Ask for state right away: the model/source pickers must not wait for a click.
-        this.client?.sendCommand('state');
-        // Продолжаем последний чат этого проекта.
-        //
-        // Панель открывалась с чистого листа, и разговор приходилось искать
-        // в истории вручную — в терминале для этого есть /resume, а здесь не
-        // было ничего. Редактор — место, куда возвращаются: чат обязан
-        // продолжаться сам. Отключается настройкой, если кому-то нужен
-        // каждый раз чистый лист.
-        if (vscode.workspace.getConfiguration('execai').get<boolean>('resumeLastChat', true)) {
-          this.client?.sendCommand('resume_last');
-        }
-        if ((e.protocol ?? 0) > PROTOCOL) {
-          this.toWebview({
-            type: 'notice',
-            text: vscode.l10n.t(
-              'This execai is newer than the extension — update the extension, some events may not render.',
-            ),
-          });
-        }
-        break;
-      case 'turn_start':
-        this.status.text = this.statusBase() + ' · ' + vscode.l10n.t('turn…');
-        break;
-      case 'done':
-        this.status.text = this.statusBase();
-        break;
-      case 'ask':
-      case 'ask_user':
-        // The user may be in another editor tab — bring the panel forward.
-        this.view?.show?.(true);
-        break;
-      case 'login_start': {
-        // The link opens by itself, but it must also be takeable by hand: over
-        // SSH nothing opens, and the sign-in may happen in a browser on a
-        // different machine. The panel shows the same link with a copy button.
-        const uri = e.text || '';
-        const copy = vscode.l10n.t('Copy link');
-        void vscode.window.showInformationMessage(
-          vscode.l10n.t('Confirm the sign-in: code {0}', e.id ?? ''),
-          vscode.l10n.t('Open in browser'), copy,
-        ).then((p) => {
-          if (p === copy) void vscode.env.clipboard.writeText(uri);
-          else if (p && uri) void vscode.env.openExternal(vscode.Uri.parse(uri));
-        });
-        if (uri) void vscode.env.openExternal(vscode.Uri.parse(uri));
-        break;
-      }
-      case 'login_done':
-        void vscode.window.showInformationMessage(
-          vscode.l10n.t('ExecAI: signed in as {0}', e.text || ''));
-        break;
-      case 'state':
-        this.lastState = e;
-        this.status.text = this.statusMain = `ExecAI: ${e.model ?? '?'} · ${e.source ?? ''}`;
-        break;
-    }
-    this.toWebview(e);
+    this.core.fromAgent(e);
   }
-
-  private uiReady = false;
 
   private toWebview(e: unknown): void {
     if (this.view && this.uiReady) void this.view.webview.postMessage(e);
     else this.pending.push(e as AgentEvent);
   }
 
-  private flag(chat: string) {
-    let f = this.flags.get(chat);
-    if (!f) { f = {}; this.flags.set(chat, f); }
-    return f;
-  }
-
-  /** Tab badges for every chat — the webview draws them on the strip. */
-  private pushFlags(): void {
-    const flags: Record<string, unknown> = {};
-    for (const [id, f] of this.flags) flags[id] = f;
-    this.toWebview({ type: 'chat_flags', flags });
-  }
-
-  /** Keeps per-chat state in step with the stream, active chat included. */
-  private noteFlags(e: AgentEvent): void {
-    if (!e.chat) return;
-    const f = this.flag(e.chat);
-    let changed = true;
-    switch (e.type) {
-      case 'turn_start': f.busy = true; f.asking = false; break;
-      case 'done': f.busy = false; f.asking = false; if (e.chat !== this.activeChat) f.unseen = true; break;
-      case 'ask': case 'ask_user': f.asking = true; break;
-      case 'wakeup': f.wake = e.at || ''; break;
-      case 'wakeup_cancelled': f.wake = ''; break;
-      case 'chat_loaded': f.busy = !!e.busy; f.wake = e.at || ''; break;
-      default: changed = false;
-    }
-    if (changed) this.pushFlags();
-  }
-
-  private chatName(id: string): string {
-    return (this.chatLabels.get(id) || '').trim() || vscode.l10n.t('untitled chat');
-  }
-
-  /** An event from a chat that is not on screen: badges, plus a toast when it needs a human. */
-  private backgroundEvent(e: AgentEvent): void {
-    const open = vscode.l10n.t('Open');
-    const show = (msg: string) => {
-      void vscode.window.showInformationMessage(msg, open).then((p) => {
-        if (p !== open || !e.chat) return;
-        this.view?.show?.(true);
-        this.client?.sendCommand('load_chat', e.chat);
-      });
-    };
-    switch (e.type) {
-      case 'done':
-        if (e.text === 'stopped') break;
-        show(vscode.l10n.t('Chat «{0}» finished its turn.', this.chatName(e.chat || '')));
-        break;
-      case 'ask':
-      case 'ask_user':
-        show(vscode.l10n.t('Chat «{0}» is waiting for your answer.', this.chatName(e.chat || '')));
-        break;
-      case 'error':
-        show(vscode.l10n.t('Chat «{0}»: {1}', this.chatName(e.chat || ''), e.text || ''));
-        break;
-    }
-  }
-
   // ── human actions ───────────────────────────────────────────────
 
-  private fromWebview(m: { type: string; text?: string; id?: string; value?: string; path?: string; line?: string; files?: string[] }): void {
-    switch (m.type) {
-      case 'ui_ready': {
-        this.uiReady = true;
-        for (const e of this.pending) void this.view?.webview.postMessage(e);
-        this.pending = [];
-        const tabs = this.ctx.workspaceState.get<string>('execai.tabs', '');
-        if (tabs) this.toWebview({ type: 'tabs_state', text: tabs });
-        break;
-      }
-      case 'send': {
-        if (!this.client?.alive) this.startAgent();
-        const ctx = this.editorContext() ?? {};
-        if (m.files?.length) ctx.files = m.files;
-        this.client?.sendUser(m.text || '', ctx, this.activeChat ?? undefined);
-        // The auto-attached context must be visible: the agent knowing about a
-        // file the chat never showed reads as spooky action at a distance —
-        // "the AI sees my file but the panel shows nothing".
-        if (ctx.path) {
-          this.toWebview({
-            type: 'context_attached',
-            text: ctx.selection
-              ? vscode.l10n.t('{0} + selection (active file)', ctx.path)
-              : vscode.l10n.t('{0} (active file)', ctx.path),
-          });
-        }
-        break;
-      }
-      case 'pick_files':
-        void this.pickFiles();
-        break;
-      case 'tabs_state':
-        // Which chat tabs are on the strip and in what order is a property of
-        // this workspace, not of the agent: it survives a reload here.
-        void this.ctx.workspaceState.update('execai.tabs', m.text || '');
-        break;
-      case 'copy_text':
-        // The webview cannot rely on navigator.clipboard in every host — the
-        // extension side always can.
-        void vscode.env.clipboard.writeText(m.text || '');
-        break;
-      case 'attach_paths':
-        void this.attachPaths((m as { paths?: string[] }).paths || []);
-        break;
-      case 'paste_blob':
-        void this.saveBlobAndAttach(
-          (m as { name?: string }).name || 'clipboard.bin',
-          (m as { dataURL?: string }).dataURL || '');
-        break;
-      case 'agent_command': {
-        const c = m as unknown as { name?: string; value?: string };
-        if (!this.client?.alive) {
-          // A dead agent used to swallow commands in silence while the panel
-          // kept its optimism. Say what is actually wrong instead.
-          if (!vscode.workspace.workspaceFolders?.length) {
-            this.toWebview({
-              type: 'error',
-              text: vscode.l10n.t('Open a project folder — the agent needs a working directory.'),
-            });
-          } else {
-            this.startAgent();
-            this.toWebview({
-              type: 'notice',
-              text: vscode.l10n.t('The agent is starting — repeat the action in a moment.'),
-            });
-          }
-          break;
-        }
-        if (c.name === 'connect') { void this.connectFlow(c.value || ''); break; }
-        if (c.name === 'set_max_iterations' && !c.value) { void this.maxIterFlow(); break; }
-        if (c.name === 'cancel_wakeup' || c.name === 'wake_now') {
-          this.client?.sendCommand(c.name, c.value || this.activeChat || '');
-          break;
-        }
-        this.client?.sendCommand(c.name || '', c.value);
-        break;
-      }
-      case 'new_chat_ui':
-        this.newChat();
-        break;
-      case 'open_terminal':
-        void vscode.commands.executeCommand('execai.openTerminal');
-        break;
-      case 'check_updates':
-        void vscode.commands.executeCommand('execai.checkUpdates');
-        break;
-      case 'answer':
-        this.client?.sendAnswer(m.id || '', m.value || '');
-        break;
-      case 'stop':
-        this.client?.stop(this.activeChat ?? undefined);
-        break;
-      case 'new_chat':
-        this.client?.newChat();
-        break;
-      case 'open_file': {
-        if (!m.path) break;
-        void this.openFile(m.path, m.line);
-        break;
-      }
-      case 'open_external': {
-        // Links in an answer are text the model produced — only the schemes a
-        // chat has any business opening are followed.
-        const url = m.text || '';
-        if (!/^(https?:|mailto:)/i.test(url)) break;
-        void vscode.env.openExternal(vscode.Uri.parse(url));
-        break;
-      }
-      case 'restart':
-        this.startAgent();
-        break;
-    }
+  private fromWebview(m: PanelMessage): void {
+    this.core.fromPanel(m);
   }
 
   /** Editor context — only when the setting allows it. */
@@ -414,116 +221,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const n = Math.max(0, (parseInt(line || '0', 10) || 1) - 1);
     const at = new vscode.Range(n, 0, n, 0);
     await vscode.window.showTextDocument(uri, { preview: true, selection: at });
-  }
-
-  /** Connecting a source: the key is asked for with an editor input box. */
-  private async connectFlow(provider: string): Promise<void> {
-    if (provider === 'custom') { await this.customProviderFlow(); return; }
-    const noKey = provider === 'claude-cli' || provider === 'codex-cli';
-    let key: string | undefined;
-    if (!noKey) {
-      key = await vscode.window.showInputBox({
-        title: vscode.l10n.t('Key for {0}', provider),
-        prompt: provider === 'ollama'
-          ? vscode.l10n.t('An ollama.com key for the cloud; leave empty for a local Ollama')
-          : vscode.l10n.t('Provider key — stored on this machine only'),
-        password: true,
-        ignoreFocusOut: true,
-      });
-      // Cancelling the box (Esc) is a refusal to connect, not an empty key.
-      if (key === undefined && provider !== 'ollama') return;
-    }
-    this.client?.sendCommand('connect', provider, { key: key || '' });
-  }
-
-  /**
-   * A custom provider: any endpoint that speaks the OpenAI or the Anthropic
-   * protocol. Asked in the same order as `/connect custom` in the terminal —
-   * name, protocol, address, key — plus the model IDs for an endpoint that
-   * has no /models route. Esc at any step cancels; nothing is sent.
-   */
-  private async customProviderFlow(): Promise<void> {
-    const title = (step: number) => vscode.l10n.t('Custom provider ({0}/5)', step);
-    const name = await vscode.window.showInputBox({
-      title: title(1),
-      prompt: vscode.l10n.t('Name — it becomes the source id, e.g. LM Studio, vLLM, deepseek'),
-      placeHolder: 'LM Studio',
-      ignoreFocusOut: true,
-      validateInput: (t) =>
-        /[a-z0-9]/i.test(t) ? null : vscode.l10n.t('use latin letters or digits'),
-    });
-    if (name === undefined) return;
-
-    const api = await vscode.window.showQuickPick(
-      [
-        {
-          label: vscode.l10n.t('OpenAI-compatible'),
-          description: '…/chat/completions',
-          detail: 'LM Studio, vLLM, llama.cpp, LiteLLM, DeepSeek, Groq, Together, Mistral…',
-          value: 'openai' as const,
-        },
-        {
-          label: vscode.l10n.t('Anthropic-compatible'),
-          description: '…/v1/messages',
-          detail: vscode.l10n.t('LiteLLM, Claude gateways, MiniMax, DeepSeek…'),
-          value: 'anthropic' as const,
-        },
-      ],
-      { title: title(2), placeHolder: vscode.l10n.t('Interface type'), ignoreFocusOut: true },
-    );
-    if (!api) return;
-
-    const baseUrl = await vscode.window.showInputBox({
-      title: title(3),
-      prompt: api.value === 'anthropic'
-        ? vscode.l10n.t('Server address without /v1/messages, e.g. https://llm.corp.local')
-        : vscode.l10n.t('Server address, e.g. http://localhost:1234/v1 or https://api.deepseek.com'),
-      placeHolder: api.value === 'anthropic' ? 'https://llm.corp.local' : 'http://localhost:1234/v1',
-      ignoreFocusOut: true,
-      validateInput: (t) => {
-        const v = t.trim();
-        if (!v) return vscode.l10n.t('an address is required');
-        return /^(https?:\/\/)?[^\s/]+(\/\S*)?$/i.test(v) ? null : vscode.l10n.t('not an http(s) address');
-      },
-    });
-    if (baseUrl === undefined) return;
-
-    const key = await vscode.window.showInputBox({
-      title: title(4),
-      prompt: vscode.l10n.t('API key — leave empty if the server needs none. Stored on this machine only'),
-      password: true,
-      ignoreFocusOut: true,
-    });
-    if (key === undefined) return;
-
-    const models = await vscode.window.showInputBox({
-      title: title(5),
-      prompt: vscode.l10n.t("Model IDs separated by commas — leave empty to take the server's own list"),
-      placeHolder: 'qwen3-coder, llama-4',
-      ignoreFocusOut: true,
-    });
-    if (models === undefined) return;
-
-    this.client?.sendCommand('connect', 'custom', {
-      label: name.trim(),
-      api: api.value,
-      base_url: baseUrl.trim(),
-      key: key.trim(),
-      models: models.split(',').map((m) => m.trim()).filter(Boolean),
-    });
-  }
-
-  /** Iteration limit — a plain number. */
-  private async maxIterFlow(): Promise<void> {
-    const cur = this.lastState?.max_iter ?? 50;
-    const v = await vscode.window.showInputBox({
-      title: vscode.l10n.t('Tool iteration limit per turn'),
-      value: String(cur),
-      ignoreFocusOut: true,
-      validateInput: (t) =>
-        /^[1-9]\d*$/.test(t.trim()) ? null : vscode.l10n.t('a positive number is required'),
-    });
-    if (v) this.client?.sendCommand('set_max_iterations', v.trim());
   }
 
   /** The explicit "Install/update the agent" command from the palette. */
@@ -670,8 +367,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // ── commands ────────────────────────────────────────────────────
 
   newChat(): void {
-    this.client?.newChat();
-    this.toWebview({ type: 'chat_reset' });
+    this.core.newChat();
   }
   stopTurn(): void {
     this.client?.stop();

@@ -8,9 +8,17 @@
 // language, and a bundle per language is added next to it. The table is injected
 // into the inline script as `T`, so runtime text is translated the same way as
 // the static markup.
+//
+// The same page also runs in a browser, served by `execai ui` (browserHtml):
+// there it talks to window.execaiHost (browserHost.ts) instead of
+// acquireVsCodeApi(), gets defaults for the --vscode-* variables, a header in
+// place of the status bar, and hides what only an editor can do (open a file,
+// a terminal, restart the agent).
 
 import * as vscode from 'vscode';
 import { renderMarkdown } from './markdown';
+import { inboxMenuEntries, fleetView } from './panelLogic';
+import { PAYMENT_URL } from './protocol';
 
 export type ChatLang = 'en' | 'ru';
 
@@ -79,6 +87,41 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     signedIn: 'Signed in: ',
     agentExited: 'The agent exited.',
     restartBtn: 'Restart',
+    inboxListening: 'Tasks from the web: accepted in this window',
+    inboxOtherServe: 'Tasks from the web are accepted by the background execai serve',
+    inboxTake: 'Accept here',
+    inboxOtherIde: 'Tasks from the web are accepted by another window: ',
+    inboxNoPlan: 'Running tasks from the web is available on the Work and Max plans',
+    inboxPlans: 'Choose a plan',
+    inboxDisabled: 'Accepting tasks from the web is turned off',
+    inboxNotLoggedIn: 'Sign in to accept tasks from the web',
+    mProject: 'Project',
+    projectNone: 'not bound',
+    mUnbind: 'Unbind the project',
+    tabWeb: 'a task from the web',
+    webTurn: 'From the web: ',
+    askResolved: 'Answered on the web — the question is closed.',
+    askCancelled: 'The question was withdrawn.',
+    agentsHead: 'Agents',
+    agentsRunning: '{n} running',
+    agentsDone: '{n} done',
+    agentsFailed: '{n} failed',
+    agentsToggle: 'Subagents — click to fold or unfold',
+    agentStop: 'Stop',
+    agentStopTitle: 'Stop this subagent',
+    agentOpenTitle: 'Click to open what it has done (read-only)',
+    agQueued: 'queued',
+    agRunning: 'working',
+    agWaiting: 'waiting for your answer',
+    agDone: 'done',
+    agFailed: 'failed',
+    agCancelled: 'stopped',
+    agTokens: 'tokens',
+    tabAgents: 'subagents at work',
+    agentTab: 'a subagent — read-only',
+    agentReadOnly: 'Read-only: what the subagent has done so far.',
+    agentBack: 'Back to the chat',
+    askFromAgent: 'Subagent: ',
   },
   ru: {
     empty: 'Опиши задачу — агент работает прямо в папке проекта.\nАктивный файл и выделение прикладываются автоматически (настройка execai.attachContext).\nФайлы: перетаскивай сюда с зажатым Shift, вставляй Ctrl+V или кнопкой +.',
@@ -143,6 +186,41 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     signedIn: 'Вошли: ',
     agentExited: 'Агент завершился.',
     restartBtn: 'Перезапустить',
+    inboxListening: 'Задачи с сайта: принимает это окно',
+    inboxOtherServe: 'Задачи с сайта принимает фоновый процесс execai serve',
+    inboxTake: 'Принимать здесь',
+    inboxOtherIde: 'Задачи с сайта принимает другое окно: ',
+    inboxNoPlan: 'Запуск задач с сайта доступен на тарифах «Работа» и «Макс»',
+    inboxPlans: 'Выбрать тариф',
+    inboxDisabled: 'Приём задач с сайта выключен',
+    inboxNotLoggedIn: 'Войти, чтобы принимать задачи с сайта',
+    mProject: 'Проект',
+    projectNone: 'не привязан',
+    mUnbind: 'Отвязать проект',
+    tabWeb: 'задача с сайта',
+    webTurn: 'С сайта: ',
+    askResolved: 'Ответили на сайте — вопрос закрыт.',
+    askCancelled: 'Вопрос снят.',
+    agentsHead: 'Агенты',
+    agentsRunning: 'работают: {n}',
+    agentsDone: 'готово: {n}',
+    agentsFailed: 'с ошибкой: {n}',
+    agentsToggle: 'Субагенты — клик, чтобы свернуть или развернуть',
+    agentStop: 'Остановить',
+    agentStopTitle: 'Остановить этого субагента',
+    agentOpenTitle: 'Клик — открыть наработанное (только чтение)',
+    agQueued: 'в очереди',
+    agRunning: 'работает',
+    agWaiting: 'ждёт твоего ответа',
+    agDone: 'готово',
+    agFailed: 'ошибка',
+    agCancelled: 'остановлен',
+    agTokens: 'токенов',
+    tabAgents: 'работают субагенты',
+    agentTab: 'субагент — только чтение',
+    agentReadOnly: 'Только чтение: что субагент успел сделать.',
+    agentBack: 'Вернуться в чат',
+    askFromAgent: 'Субагент: ',
   },
 };
 
@@ -151,19 +229,175 @@ export function pickLang(code?: string): ChatLang {
   return (code || '').toLowerCase().startsWith('ru') ? 'ru' : 'en';
 }
 
-export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lang?: string): string {
-  const nonce = String(Math.random()).slice(2);
+/** The chat page for the VS Code webview. */
+export function chatHtml(_webview: vscode.Webview, _extensionUri: vscode.Uri, lang?: string): string {
+  return panelPage(pickLang(lang), { nonce: String(Math.random()).slice(2) });
+}
+
+/** Placeholders `execai ui` fills in when it serves the browser page. */
+export const NONCE_SLOT = '{{NONCE}}';
+export const CONFIG_SLOT = '{{CONFIG}}';
+
+/**
+ * The same chat page for a browser, as `execai ui` serves it
+ * (dist/panel-browser.<lang>.html, built by `npm run build:panel`).
+ *
+ * hostJs is the bundled browserHost.ts; l10n is the translation table of the
+ * extension host strings (l10n/bundle.l10n.<lang>.json), which PanelCore
+ * needs in the page. The server replaces every {{NONCE}} with a fresh nonce
+ * and {{CONFIG}} — a JavaScript literal inside the host script — with JSON
+ * {lang, cwd, version, upload} (<, >, & and ' escaped as \u…).
+ */
+export function browserHtml(lang: string | undefined, hostJs: string, l10n: Record<string, string> = {}): string {
+  return panelPage(pickLang(lang), { nonce: NONCE_SLOT, browser: { hostJs, l10n } });
+}
+
+/** Text for an inline <script>: nothing in it may close the tag early. */
+function inlineSafe(js: string): string {
+  return js.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--');
+}
+
+/**
+ * Defaults for the editor theme variables in a browser, [light, dark] —
+ * VS Code's Light Modern and Dark Modern. A webview gets these from the
+ * editor; a plain browser tab has none, and every colour would fall through.
+ */
+const THEME_DEFAULTS: Record<string, [string, string]> = {
+  'foreground': ['#3b3b3b', '#cccccc'],
+  'descriptionForeground': ['#6f6f6f', '#9d9d9d'],
+  'errorForeground': ['#c72e0f', '#f85149'],
+  'sideBar-background': ['#f8f8f8', '#181818'],
+  'editor-background': ['#ffffff', '#1f1f1f'],
+  'panel-border': ['#e5e5e5', '#2b2b2b'],
+  'focusBorder': ['#005fb8', '#0078d4'],
+  'list-hoverBackground': ['#f0f0f0', '#2a2d2e'],
+  'input-background': ['#ffffff', '#313131'],
+  'input-border': ['#cecece', '#3c3c3c'],
+  'input-foreground': ['#3b3b3b', '#cccccc'],
+  'button-background': ['#005fb8', '#0078d4'],
+  'button-foreground': ['#ffffff', '#ffffff'],
+  'button-hoverBackground': ['#0258a8', '#026ec1'],
+  'button-border': ['#0000001a', '#ffffff12'],
+  'button-secondaryBackground': ['#e5e5e5', '#313131'],
+  'button-secondaryForeground': ['#3b3b3b', '#cccccc'],
+  'badge-background': ['#cccccc', '#616161'],
+  'badge-foreground': ['#3b3b3b', '#f8f8f8'],
+  'textLink-foreground': ['#005fb8', '#4daafc'],
+  'textCodeBlock-background': ['#f2f2f2', '#2b2b2b'],
+  'progressBar-background': ['#005fb8', '#0078d4'],
+  'inputValidation-warningBorder': ['#b89500', '#b89500'],
+  'toolbar-hoverBackground': ['#b8b8b850', '#5a5d5e50'],
+  'scrollbarSlider-background': ['#64646466', '#79797966'],
+  'scrollbarSlider-hoverBackground': ['#646464b3', '#646464b3'],
+  'tab-activeBackground': ['#ffffff', '#1f1f1f'],
+  'tab-activeForeground': ['#3b3b3b', '#ffffff'],
+  'tab-inactiveBackground': ['#f8f8f8', '#181818'],
+  'tab-inactiveForeground': ['#868686', '#9d9d9d'],
+  'editorGroupHeader-tabsBackground': ['#f8f8f8', '#181818'],
+  'menu-background': ['#ffffff', '#1f1f1f'],
+  'menu-foreground': ['#3b3b3b', '#cccccc'],
+  'menu-border': ['#cecece', '#454545'],
+  'menu-selectionBackground': ['#005fb8', '#0078d4'],
+  'menu-selectionForeground': ['#ffffff', '#ffffff'],
+  'menu-separatorBackground': ['#d4d4d4', '#454545'],
+  'charts-green': ['#388a34', '#89d185'],
+};
+const FONT_DEFAULTS: Record<string, string> = {
+  'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", sans-serif',
+  'editor-font-family': 'ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace',
+};
+
+/** The browser-only stylesheet: theme defaults, the header, toasts, dialogs. */
+function browserCss(): string {
+  const vars = (i: 0 | 1) => Object.entries(THEME_DEFAULTS)
+    .map(([k, v]) => `    --vscode-${k}: ${v[i]};`).join('\n');
+  const fonts = Object.entries(FONT_DEFAULTS).map(([k, v]) => `    --vscode-${k}: ${v};`).join('\n');
+  return `
+  /* ── browser page (execai ui): the editor theme is not there, so its
+     variables get defaults — light or dark after the system setting. */
+  :root {
+${fonts}
+${vars(0)}
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+  :root {
+${vars(1)}
+  }
+  }
+  html { background: var(--vscode-sideBar-background); }
+  body.browser { max-width: 920px; margin: 0 auto;
+    border-left: 1px solid var(--vscode-panel-border); border-right: 1px solid var(--vscode-panel-border); }
+  #hdr { display: flex; gap: 8px; align-items: center; padding: 6px 10px; font-size: 12px;
+    color: var(--vscode-descriptionForeground); border-bottom: 1px solid var(--vscode-panel-border); }
+  #hdr .hdr-status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--vscode-foreground); }
+  #hdr .hdr-where { min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #hdr .hdr-conn:empty { display: none; }
+  #hdr .hdr-conn { color: var(--vscode-inputValidation-warningBorder); white-space: nowrap; }
+  #hdr button { font: inherit; cursor: pointer; border: none; border-radius: 4px; padding: 1px 6px;
+    background: transparent; color: inherit; }
+  #hdr button:hover { background: var(--vscode-toolbar-hoverBackground); }
+  #toasts { display: flex; flex-direction: column; gap: 4px; padding: 0 8px; }
+  #toasts:empty { display: none; }
+  .toast { display: flex; gap: 8px; align-items: center; margin-top: 6px; padding: 6px 9px;
+    border-radius: 6px; font-size: 12px; animation: exIn 160ms ease-out;
+    background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); }
+  .toast.warn { border-color: var(--vscode-inputValidation-warningBorder); }
+  .toast span { flex: 1; min-width: 0; word-break: break-word; }
+  .toast button { font: inherit; font-size: 11.5px; cursor: pointer; padding: 2px 9px; border-radius: 4px;
+    border: 1px solid var(--vscode-button-border); background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground); }
+  .toast i { font-style: normal; cursor: pointer; opacity: .6; padding: 0 3px; }
+  .toast i:hover { opacity: 1; }
+  #dlg { display: none; position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35);
+    align-items: flex-start; justify-content: center; padding: 12vh 16px 0; }
+  #dlg.open { display: flex; }
+  .dlg-box { width: 100%; max-width: 480px; padding: 12px; border-radius: 8px;
+    background: var(--vscode-menu-background); color: var(--vscode-menu-foreground);
+    border: 1px solid var(--vscode-menu-border); box-shadow: 0 8px 28px rgba(0,0,0,.35); }
+  .dlg-title { font-weight: 600; margin-bottom: 6px; }
+  .dlg-prompt { color: var(--vscode-descriptionForeground); font-size: 12px; margin-bottom: 8px; }
+  .dlg-input { width: 100%; padding: 6px 8px; font: inherit; border-radius: 4px; outline: none;
+    color: var(--vscode-input-foreground); background: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border); }
+  .dlg-input:focus { border-color: var(--vscode-focusBorder); }
+  .dlg-err { color: var(--vscode-errorForeground); font-size: 11.5px; min-height: 16px; margin-top: 4px; }
+  .dlg-list { display: flex; flex-direction: column; gap: 3px; max-height: 50vh; overflow-y: auto; }
+  .dlg-item { text-align: left; padding: 6px 9px; border-radius: 5px; cursor: pointer; font: inherit;
+    color: inherit; background: transparent; border: 1px solid var(--vscode-panel-border); }
+  .dlg-item:hover, .dlg-item:focus { background: var(--vscode-list-hoverBackground); outline: none; }
+  .dlg-item small { margin-left: 6px; color: var(--vscode-descriptionForeground); }
+  .dlg-detail { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+  .dlg-btns { display: flex; gap: 6px; justify-content: flex-end; margin-top: 10px; }
+  .dlg-btns button { padding: 4px 12px; border-radius: 4px; cursor: pointer; font: inherit;
+    border: 1px solid var(--vscode-button-border); background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground); }
+  .dlg-btns button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+  /* No editor to open a file in: paths in answers are plain text here. */
+  body.browser .assistant a[data-file] { cursor: text; color: inherit; text-decoration: none; }
+  body.browser .files span { cursor: default; }
+`;
+}
+
+function panelPage(code: ChatLang, o: { nonce: string; browser?: { hostJs: string; l10n: Record<string, string> } }): string {
+  const nonce = o.nonce;
+  const browser = !!o.browser;
   // Исходник рендерера уезжает в панель как есть: так у панели и у тестов
   // одна и та же реализация, и разойтись они не могут.
   const mdSource = renderMarkdown.toString();
-  const code = pickLang(lang);
+  const inboxSource = inboxMenuEntries.toString();
+  const fleetSource = fleetView.toString();
   const T = STRINGS[code];
+  const csp = browser
+    ? `default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; form-action 'none';`
+    : `default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`;
   return /* html */ `<!DOCTYPE html>
 <html lang="${code}">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8">${browser ? '\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>ExecAI</title>' : ''}
 <meta http-equiv="Content-Security-Policy"
-      content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+      content="${csp}">
 <style>
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -315,8 +549,12 @@ export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lan
   #tabs .tab b.busy { width: 7px; height: 7px; border-radius: 50%;
     background: var(--vscode-progressBar-background, #0078d4); animation: exPulse 1.2s ease-in-out infinite; }
   #tabs .tab b.unseen { width: 7px; height: 7px; border-radius: 50%; background: var(--vscode-charts-green, #3fb950); }
-  #tabs .tab b.ask { color: var(--vscode-inputValidation-warningBorder, #b89500); font-weight: bold; }
+  /* b.ask also matches the question box rule .ask (border, padding): undo it. */
+  #tabs .tab b.ask { color: var(--vscode-inputValidation-warningBorder, #b89500); font-weight: bold;
+    border: none; border-radius: 0; padding: 0; margin: 0; animation: none; }
   #tabs .tab b.wake { opacity: .8; }
+  /* Origin, not state: a chat started by a task from the site. */
+  #tabs .tab b.web { opacity: .85; }
   @keyframes exPulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
   .wake { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .wake button { font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 10px; cursor: pointer;
@@ -503,22 +741,72 @@ export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lan
   #menu .mi small { color: var(--vscode-descriptionForeground); }
   #menu .mi:hover small { color: inherit; opacity: .8; }
   #menu .mi .check { width: 14px; text-align: center; }
+  /* Inbox status line: text to read, clickable only when it is an action. */
+  #menu .mi.info { cursor: default; white-space: normal; word-break: break-word;
+                   color: var(--vscode-descriptionForeground); }
+  #menu .mi.info:not(.act):hover { background: none; color: var(--vscode-descriptionForeground); }
+  #menu .mi.info.act { cursor: pointer; color: inherit; }
   #menu .sep { height: 1px; margin: 4px 2px;
                background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border)); }
   #menu .head { display: flex; gap: 6px; align-items: center; padding: 4px 6px 6px;
                 color: var(--vscode-descriptionForeground); font-size: 11px; }
   #menu .head span { cursor: pointer; }
   #menu .head span:hover { color: var(--vscode-foreground); }
-</style>
+
+  /* ── subagents (E101): who is doing what, right above the composer. ── */
+  #agents { display: none; border-top: 1px solid var(--vscode-panel-border); font-size: 11.5px; }
+  #agents.on { display: block; }
+  #agents .ag-head { display: flex; gap: 5px; align-items: center; padding: 4px 9px;
+    cursor: pointer; user-select: none; color: var(--vscode-descriptionForeground); }
+  #agents .ag-head:hover { color: var(--vscode-foreground); }
+  #agents .ag-caret { width: 10px; }
+  #agents .ag-list { max-height: 140px; overflow-y: auto; padding: 0 4px 4px; }
+  #agents .ag-row { display: flex; gap: 6px; align-items: center; padding: 3px 5px;
+    border-radius: 5px; cursor: pointer; }
+  #agents .ag-row:hover, #agents .ag-row.on { background: var(--vscode-list-hoverBackground); }
+  #agents .ag-st { width: 14px; flex: 0 0 auto; text-align: center; }
+  #agents .ag-row[data-state="running"] .ag-st { color: var(--vscode-progressBar-background, #0078d4);
+    animation: exPulse 1.4s ease-in-out infinite; }
+  #agents .ag-row[data-state="waiting"] .ag-st { color: var(--vscode-inputValidation-warningBorder, #b89500); font-weight: bold; }
+  #agents .ag-row[data-state="done"] .ag-st { color: var(--vscode-charts-green, #3fb950); }
+  #agents .ag-row[data-state="failed"] .ag-st { color: var(--vscode-errorForeground); }
+  #agents .ag-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #agents .ag-meta { flex: 0 1 auto; min-width: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; }
+  #agents .ag-stop { flex: 0 0 auto; font: inherit; font-size: 10.5px; padding: 1px 7px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--vscode-button-border, transparent);
+    background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+  #agents .ag-stop:disabled { opacity: .5; cursor: default; }
+  #tabs .tab b.agents { opacity: .85; font-variant-numeric: tabular-nums; }
+  #tabs .tab.agent span { font-style: italic; }
+  /* A subagent's transcript is read-only: no input, a way back instead. */
+  #ro { display: none; gap: 8px; align-items: center; font-size: 11.5px; padding: 2px 2px 4px;
+    color: var(--vscode-descriptionForeground); }
+  #ro span { flex: 1; }
+  #ro button { font: inherit; font-size: 11px; padding: 1px 9px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--vscode-button-border, transparent);
+    background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+  body.agentview #ro { display: flex; }
+  body.agentview #box, body.agentview #chips { display: none; }
+  .ask-agent { font-size: 11px; margin-bottom: 4px; cursor: pointer; color: var(--vscode-descriptionForeground); }
+  .ask-agent:hover { color: var(--vscode-foreground); }
+  @media (prefers-reduced-motion: reduce) {
+    #agents .ag-row[data-state="running"] .ag-st { animation: none; }
+  }
+${browser ? browserCss() : ''}</style>
 </head>
-<body>
+<body${browser ? ' class="browser"' : ''}>${browser ? `
+  <div id="hdr"></div>
+  <div id="toasts"></div>` : ''}
   <div id="tabs"></div>
   <div id="log">
     <div id="empty">${T.empty}</div>
   </div>
+  <div id="agents"></div>
   <div id="composer">
     <div id="menu"></div>
     <div id="status" title="${T.statusTitle}">…</div>
+    <div id="ro"><span>${T.agentReadOnly}</span><button id="roBack">${T.agentBack}</button></div>
     <div id="chips"></div>
     <div id="box">
       <textarea id="inp" placeholder="${T.placeholder}"></textarea>
@@ -533,7 +821,13 @@ export function chatHtml(webview: vscode.Webview, _extensionUri: vscode.Uri, lan
       </div>
     </div>
   </div>
-
+${browser ? `  <div id="dlg"></div>
+<script nonce="${nonce}">
+window.execaiPage = ${inlineSafe(JSON.stringify({ T, l10n: o.browser!.l10n }))};
+window.execaiPage.config = ${CONFIG_SLOT};
+${inlineSafe(o.browser!.hostJs)}
+</script>
+` : ''}
 <script nonce="${nonce}">
 const T = ${JSON.stringify(T)};
 // The markdown renderer: the very source the tests cover (src/markdown.ts).
@@ -544,7 +838,16 @@ const T = ${JSON.stringify(T)};
 // text. Unit tests run an unminified bundle and could not see it; the live
 // editor run did.
 const renderMarkdown = ${mdSource};
-const vscode = acquireVsCodeApi();
+// The inbox section of the menu (src/panelLogic.ts) — bound to a name for the
+// same reason as renderMarkdown.
+const inboxMenuEntries = ${inboxSource};
+// The subagents block (src/panelLogic.ts), bound to a name the same way.
+const fleetView = ${fleetSource};
+const PAYMENT_URL = ${JSON.stringify(PAYMENT_URL)};
+// In a browser (execai ui) the page talks to window.execaiHost, which plays
+// the extension's part (browserHost.ts); what needs an editor is hidden.
+const BROWSER = ${browser};
+${browser ? 'const vscode = window.execaiHost;' : 'const vscode = acquireVsCodeApi();'}
 const log = document.getElementById('log');
 const inp = document.getElementById('inp');
 const sendBtn = document.getElementById('sendBtn');
@@ -554,10 +857,34 @@ const chipsBox = document.getElementById('chips');
 let curAssistant = null;  // current answer block
 let curThinking = null;   // current reasoning block
 let tools = {};           // id → card elements
+let asks = {};            // ask id → its box, so a question answered elsewhere can be taken back
 let attached = [];        // [{path, label, thumb?}] — "+", drag&drop, paste
 let isStudio = false;     // set by the extension inside ExecAI Studio
-// Per-chat badges from the extension (busy / unseen / asking / wake).
+// Per-chat badges from the extension (busy / unseen / asking / wake / web).
 let chatFlags = {};
+// Who accepts tasks from the site. null — the agent never said (an older
+// agent): then the menu has no inbox section and the panel looks as before.
+let inboxData = null;
+// Subagents (E101). The agent reports them as a full snapshot (agents). null —
+// it never did (an older agent): no block, no badges, the panel as before.
+let agentsData = null;
+let agentsCollapsed = false;
+let agentsTick = null;
+let agentRowMeta = {};    // id → the meta span of its row, for the ticking duration
+let agentsStopping = {};  // id → Stop pressed, the snapshot has not caught up yet
+let viewAgent = null;     // the subagent whose transcript is on screen (read-only)
+let viewAgentStamp = '';  // its updated_at as last loaded: a newer one reloads it
+let agentReloading = false;
+let pendingAgent = null;  // asked for with open_agent, not loaded yet
+let agentTabs = [];       // [{id, title}] — subagent tabs on the strip
+let shownChat = null;     // the chat the log shows, or showed before a subagent
+// A chat started by a task from the site: the agent tags it in the chat list,
+// the extension also learns it from turn_start and passes it on as a flag.
+function isWebChat(id) {
+  if (!id) return false;
+  if (chatFlags[id] && chatFlags[id].web) return true;
+  return chatsData.some(c => c.id === id && c.origin === 'web');
+}
 function clock(iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso || '';
@@ -619,7 +946,9 @@ const tabs = document.getElementById('tabs');
 let tabsHidden = [];
 let tabsOrder = [];
 function saveTabs() {
-  vscode.postMessage({ type: 'tabs_state', text: JSON.stringify({ hidden: tabsHidden, order: tabsOrder }) });
+  const st = { hidden: tabsHidden, order: tabsOrder };
+  if (agentsCollapsed) st.agents_collapsed = true;
+  vscode.postMessage({ type: 'tabs_state', text: JSON.stringify(st) });
 }
 // The agent lists chats by last-modified, and switching chats saves the one
 // you are leaving — so its list reshuffles on every click. Tabs must not: the
@@ -645,15 +974,21 @@ function renderTabs() {
   rememberOrder();
   tabs.innerHTML = '';
   const list = visibleChats();
-  if (!list.length) return; // nothing to switch between — no empty strip
+  if (!list.length && !agentTabs.length) return; // nothing to switch between — no empty strip
+  // Subagents still going, per parent chat: "2▶" on the parent's tab.
+  const going = agentsData ? fleetView(agentsData, Date.now(), T).perChat : {};
   for (const c of list) {
-    const t = el('div', 'tab' + (c.active ? ' active' : ''));
+    // While a subagent is on screen, no chat tab is the current one.
+    const current = c.active && !viewAgent;
+    const t = el('div', 'tab' + (current ? ' active' : ''));
     const label = (c.label || '').trim() || T.untitledChat;
     t.title = label;
     t.draggable = true;
     t.dataset.chat = c.id;
-    t.appendChild(el('span', '', label));
     const f = Object.assign({}, c.busy ? { busy: true } : {}, c.wake ? { wake: c.wake } : {}, chatFlags[c.id] || {});
+    if (c.origin === 'web' || f.web) { const b = el('b', 'web', '\u{1F310}'); b.title = T.tabWeb; t.appendChild(b); }
+    t.appendChild(el('span', '', label));
+    if (going[c.id]) { const b = el('b', 'agents', going[c.id] + '\u25b6'); b.title = T.tabAgents; t.appendChild(b); }
     if (f.asking) { const b = el('b', 'ask', '?'); b.title = T.tabAsk; t.appendChild(b); }
     else if (f.busy) { const b = el('b', 'busy', ''); b.title = T.tabBusy; t.appendChild(b); }
     else if (f.unseen && !c.active) { const b = el('b', 'unseen', ''); b.title = T.tabUnseen; t.appendChild(b); }
@@ -669,7 +1004,7 @@ function renderTabs() {
     x.onclick = close;
     t.appendChild(x);
     t.onclick = () => {
-      if (c.active) return;
+      if (current) return;
       vscode.postMessage({ type: 'agent_command', name: 'load_chat', value: c.id });
     };
     // Middle click closes, the way it does on editor tabs.
@@ -698,6 +1033,30 @@ function renderTabs() {
     };
     tabs.appendChild(t);
   }
+  // Subagent tabs: a transcript to read, opened from the Agents block.
+  for (const a of agentTabs) {
+    const t = el('div', 'tab agent' + (a.id === viewAgent ? ' active' : ''));
+    t.title = T.agentTab;
+    t.dataset.agent = a.id;
+    const bot = el('b', 'bot', '\u{1F916}');
+    bot.title = T.agentTab;
+    t.appendChild(bot);
+    t.appendChild(el('span', '', a.title || a.id));
+    const r = agentRecord(a.id);
+    if (r && r.state === 'waiting') { const b = el('b', 'ask', '?'); b.title = T.agWaiting; t.appendChild(b); }
+    else if (r && (r.state === 'running' || r.state === 'queued')) { const b = el('b', 'busy', ''); b.title = T.agRunning; t.appendChild(b); }
+    const x = el('i', '', '\u00d7');
+    x.title = T.closeTab;
+    x.onclick = (e) => {
+      if (e) e.stopPropagation();
+      agentTabs = agentTabs.filter(v => v.id !== a.id);
+      if (a.id === viewAgent || a.id === pendingAgent) { pendingAgent = null; backToChat(); }
+      renderTabs();
+    };
+    t.appendChild(x);
+    t.onclick = () => { if (a.id !== viewAgent) openAgent(a.id, a.title); };
+    tabs.appendChild(t);
+  }
   const plus = el('button', 'newtab', '+');
   plus.title = T.newTabTitle;
   plus.onclick = () => vscode.postMessage({ type: 'new_chat_ui' });
@@ -716,6 +1075,142 @@ tabs.addEventListener('wheel', (e) => {
   e.preventDefault();
 }, { passive: false });
 function refreshTabs() { vscode.postMessage({ type: 'agent_command', name: 'list_chats' }); }
+
+// ── subagents (E101) ──
+// The Agents block over the composer: one row per subagent — state, title,
+// iteration, last tool, how long it has run — and Stop while it goes. A click
+// opens its transcript in a read-only tab; the agent pushes a fresh snapshot
+// on every change, so the block is redrawn whole.
+const agentsBox = document.getElementById('agents');
+function agentRecord(id) {
+  return (agentsData || []).find(a => a && a.id === id) || null;
+}
+function agentStateLabel(st) {
+  const m = { queued: T.agQueued, running: T.agRunning, waiting: T.agWaiting,
+              done: T.agDone, failed: T.agFailed, cancelled: T.agCancelled };
+  return m[st] || st || '';
+}
+function renderAgents() {
+  const v = fleetView(agentsData, Date.now(), T);
+  agentsBox.innerHTML = '';
+  agentRowMeta = {};
+  if (!v.rows.length) {
+    agentsBox.classList.remove('on');
+    if (agentsTick) { clearInterval(agentsTick); agentsTick = null; }
+    return;
+  }
+  agentsBox.classList.add('on');
+  const head = el('div', 'ag-head');
+  head.title = T.agentsToggle;
+  head.appendChild(el('span', 'ag-caret', agentsCollapsed ? '\u25b8' : '\u25be'));
+  let sum = T.agentsHead;
+  if (v.running) sum += ' \u00b7 ' + T.agentsRunning.replace('{n}', v.running);
+  if (v.done) sum += ' \u00b7 ' + T.agentsDone.replace('{n}', v.done);
+  if (v.failed) sum += ' \u00b7 ' + T.agentsFailed.replace('{n}', v.failed);
+  head.appendChild(el('span', 'ag-sum', sum));
+  head.onclick = () => {
+    agentsCollapsed = !agentsCollapsed;
+    saveTabs();
+    renderAgents();
+    if (!agentsCollapsed) vscode.postMessage({ type: 'agent_command', name: 'list_agents' });
+  };
+  agentsBox.appendChild(head);
+  if (!agentsCollapsed) {
+    const list = el('div', 'ag-list');
+    for (const r of v.rows) {
+      const row = el('div', 'ag-row' + (r.id === viewAgent ? ' on' : ''));
+      row.setAttribute('data-agent', r.id);
+      row.setAttribute('data-state', r.state);
+      row.title = r.tip + '\\n' + T.agentOpenTitle;
+      row.appendChild(el('span', 'ag-st', r.icon));
+      row.appendChild(el('span', 'ag-title', r.title));
+      const meta = el('span', 'ag-meta', r.meta);
+      row.appendChild(meta);
+      agentRowMeta[r.id] = meta;
+      if (r.active) {
+        const b = el('button', 'ag-stop', T.agentStop);
+        b.title = T.agentStopTitle;
+        if (agentsStopping[r.id]) b.disabled = true;
+        b.onclick = (ev) => {
+          if (ev && ev.stopPropagation) ev.stopPropagation();
+          agentsStopping[r.id] = true;
+          b.disabled = true;
+          vscode.postMessage({ type: 'agent_command', name: 'stop_agent', value: r.id });
+        };
+        row.appendChild(b);
+      }
+      row.onclick = () => openAgent(r.id, r.title);
+      list.appendChild(row);
+    }
+    agentsBox.appendChild(list);
+  }
+  // Durations tick while something runs. Only the text changes: rebuilding
+  // the rows every second would swallow a click landing mid-rebuild.
+  if (v.running && !agentsTick) agentsTick = setInterval(tickAgents, 1000);
+  else if (!v.running && agentsTick) { clearInterval(agentsTick); agentsTick = null; }
+}
+function tickAgents() {
+  for (const r of fleetView(agentsData, Date.now(), T).rows) {
+    const m = agentRowMeta[r.id];
+    if (m) m.textContent = r.meta;
+  }
+}
+// Opens a subagent's transcript: a tab of its own, filled by agent_loaded.
+function openAgent(id, title) {
+  if (!id) return;
+  closeMenu();
+  const known = agentTabs.find(a => a.id === id);
+  if (known) { if (title) known.title = title; }
+  else agentTabs.push({ id, title: title || id });
+  pendingAgent = id;
+  vscode.postMessage({ type: 'agent_command', name: 'open_agent', value: id });
+  renderTabs();
+}
+function leaveAgentView() {
+  const was = viewAgent || pendingAgent;
+  viewAgent = null; pendingAgent = null; viewAgentStamp = ''; agentReloading = false;
+  document.body.classList.remove('agentview');
+  // The chat tab is the current one again — at once, not when the list comes.
+  if (was) { renderTabs(); renderAgents(); }
+}
+// From a transcript back to the chat that was on screen; the view switches
+// when chat_loaded arrives.
+function backToChat() {
+  const cur = chatsData.find(c => c.active);
+  const id = shownChat || (cur ? cur.id : '');
+  if (id) vscode.postMessage({ type: 'agent_command', name: 'load_chat', value: id });
+  else vscode.postMessage({ type: 'new_chat_ui' });
+}
+document.getElementById('roBack').onclick = backToChat;
+// Chat events that only draw into the log. While a transcript is on screen
+// they are skipped: going back reloads the chat, and the agent replays a turn
+// still in flight. Questions are never skipped — they wait for an answer.
+const LOG_ONLY = { reasoning_delta: 1, text_delta: 1, tool_call: 1, tool_chunk: 1, tool_result: 1,
+  files_changed: 1, auto_user: 1, wakeup: 1, wakeup_cancelled: 1, queued: 1, context_attached: 1 };
+
+// A saved conversation into the log: chat_loaded and agent_loaded.
+function renderHistory(msgs, webFirst) {
+  for (const m of msgs || []) {
+    const asWeb = webFirst && m.role === 'user';
+    webFirst = false;
+    if (asWeb) log.appendChild(el('div', 'msg user auto web', '\u{1F310} ' + T.webTurn + (m.text || '')));
+    else if (m.role === 'user') log.appendChild(el('div', 'msg user', m.text));
+    else if (m.role === 'assistant') {
+      const a = el('div', 'msg assistant');
+      a._md = m.text || '';
+      a.innerHTML = renderMarkdown(a._md);
+      log.appendChild(a);
+    }
+    else if (m.role === 'tool') {
+      const box = el('div', 'tool');
+      const head = el('div', 'tool-head');
+      head.appendChild(el('span', 'tool-name', m.tool || ''));
+      head.appendChild(el('span', 'tool-sum', m.text || ''));
+      box.appendChild(head);
+      log.appendChild(box);
+    }
+  }
+}
 
 // Copy buttons. The answer is re-rendered from markdown on every token, so the
 // buttons cannot live in the markup — they are attached after a render, and
@@ -767,7 +1262,7 @@ log.addEventListener('click', (e) => {
     if (node.tagName === 'A') {
       const file = node.dataset.file;
       if (file) {
-        vscode.postMessage({ type: 'open_file', path: file, line: node.dataset.line || '' });
+        if (!BROWSER) vscode.postMessage({ type: 'open_file', path: file, line: node.dataset.line || '' });
         e.preventDefault();
         return;
       }
@@ -853,6 +1348,11 @@ function renderStatus() {
     statusEl.appendChild(el('span', '', '·'));
     statusEl.appendChild(el('span', '', 'effort ' + stateData.effort));
   }
+  if (inboxData && inboxData.state === 'listening') {
+    const g = el('span', 'inbox', '\u{1F310}');
+    g.title = T.inboxListening;
+    statusEl.appendChild(g);
+  }
   if (!stateData.user) {
     statusEl.appendChild(el('span', '', '·'));
     const w = el('span', '', T.notSignedIn);
@@ -906,19 +1406,40 @@ function menuRoot() {
       vscode.postMessage({ type: 'agent_command', name: 'login' });
     }, false, 'login'));
   }
+  menuInbox();
   menu.appendChild(el('div', 'sep'));
   menu.appendChild(mi(T.mResume, '', () => {
     closeMenu();
     vscode.postMessage({ type: 'agent_command', name: 'resume_last' });
   }, false, 'resume'));
   menu.appendChild(mi(T.mNewChat, '', () => { closeMenu(); vscode.postMessage({ type: 'new_chat_ui' }); }, false, 'newchat'));
-  menu.appendChild(mi(T.mRestart, '', () => { closeMenu(); vscode.postMessage({ type: 'restart' }); }, false, 'restart'));
-  menu.appendChild(mi(T.mTerminal, '', () => { closeMenu(); vscode.postMessage({ type: 'open_terminal' }); }, false, 'terminal'));
+  // A browser has no agent process of its own to restart and no terminal.
+  if (!BROWSER) {
+    menu.appendChild(mi(T.mRestart, '', () => { closeMenu(); vscode.postMessage({ type: 'restart' }); }, false, 'restart'));
+    menu.appendChild(mi(T.mTerminal, '', () => { closeMenu(); vscode.postMessage({ type: 'open_terminal' }); }, false, 'terminal'));
+  }
   if (isStudio) {
     menu.appendChild(el('div', 'sep'));
     menu.appendChild(mi(T.mCheckUpdates, '', () => { closeMenu(); vscode.postMessage({ type: 'check_updates' }); }, false, 'updates'));
   }
   menu.classList.add('open');
+}
+// Tasks from the site: who accepts them, and what can be done about it.
+function menuInbox() {
+  const entries = inboxMenuEntries(inboxData, T, PAYMENT_URL);
+  if (!entries.length) return;
+  menu.appendChild(el('div', 'sep'));
+  for (const it of entries) {
+    const msg = it.msg;
+    const d = mi(it.label, it.extra || '', msg ? () => { closeMenu(); vscode.postMessage(msg); } : null, false, it.key);
+    if (it.info) {
+      d.classList.add('info');
+      if (msg) d.classList.add('act');
+      d.firstChild.textContent = '\u{1F310}';
+      d.setAttribute('data-inbox-state', inboxData.state);
+    }
+    menu.appendChild(d);
+  }
 }
 function menuList(kind) {
   menuView = kind;
@@ -1001,6 +1522,14 @@ function assistant() {
 
 function addAsk(e, isPermission) {
   const box = el('div', 'ask');
+  // A subagent asks through its parent's chat: say which one, and let the
+  // name open what it has done so far.
+  const ag = e.agent;
+  if (ag && (ag.title || ag.id)) {
+    const tag = el('div', 'ask-agent', '\u{1F916} ' + T.askFromAgent + (ag.title || ag.id));
+    if (ag.id) tag.onclick = () => openAgent(ag.id, ag.title);
+    box.appendChild(tag);
+  }
   box.appendChild(el('div', 'ask-title',
     isPermission ? T.askPerm + (e.tool || '') : T.askQuestion));
   if (isPermission) box.appendChild(el('div', 'ask-sum', e.summary || ''));
@@ -1017,6 +1546,7 @@ function addAsk(e, isPermission) {
     };
     box.appendChild(b);
   }
+  if (e.id) asks[e.id] = box;
   log.appendChild(box);
   scroll();
 }
@@ -1109,9 +1639,17 @@ document.addEventListener('paste', (e) => {
 vscode.postMessage({ type: 'ui_ready' });
 
 window.addEventListener('message', (ev) => {
+  // In a browser only the host's own events count: anything another window
+  // posts here is not from the agent.
+  if (BROWSER && ev.origin !== 'execai-host') return;
   const e = ev.data;
+  if (!e || typeof e.type !== 'string') return;
+  if (viewAgent && LOG_ONLY[e.type]) return;
   switch (e.type) {
     case 'ready': {
+      // A new agent process has a fleet of its own; it reports it when asked.
+      agentsData = null;
+      renderAgents();
       refreshTabs();
       clearBusy();
       clearEmpty();
@@ -1189,12 +1727,32 @@ window.addEventListener('message', (ev) => {
     }
     case 'ask': addAsk(e, true); break;
     case 'ask_user': addAsk(e, false); break;
+    case 'ask_resolved': {
+      // The question is closed and its buttons here would answer nothing.
+      // by=panel: it was answered here — nothing to add, just disable it.
+      // by=web: answered on the site first; anything else: withdrawn (the
+      // turn stopped or timed out) — the box goes and a line says which.
+      const id = e.ask_id || e.id || '';
+      const box = asks[id];
+      delete asks[id];
+      if (!box || box.classList.contains('answered') || !box.parentElement) break;
+      if (e.by === 'panel') { box.classList.add('answered'); break; }
+      box.parentElement.insertBefore(el('div', 'notice', e.by === 'web' ? T.askResolved : T.askCancelled), box);
+      box.remove();
+      scroll();
+      break;
+    }
+    case 'inbox':
+      inboxData = e.state ? e : null;
+      renderStatus();
+      if (menuView === 'root') menuRoot();
+      break;
     case 'files_changed': {
       const wrap = el('div', 'files');
       wrap.appendChild(el('span', '', '📝'));
       for (const p of e.paths || []) {
         const chip = el('span', '', p);
-        chip.onclick = () => vscode.postMessage({ type: 'open_file', path: p });
+        if (!BROWSER) chip.onclick = () => vscode.postMessage({ type: 'open_file', path: p });
         wrap.appendChild(chip);
       }
       log.appendChild(wrap);
@@ -1235,7 +1793,13 @@ window.addEventListener('message', (ev) => {
       break;
     case 'auto_user': {
       clearEmpty();
-      log.appendChild(el('div', 'msg user auto', '\u{1F319} ' + T.autoTurn + (e.text || '')));
+      // A task from the site opens its chat the way a wake-up does, but under
+      // its own caption. The agent tags it with origin; without the tag, the
+      // first turn of a chat known to be from the site is that task.
+      const web = e.origin === 'web' ||
+        (!e.origin && isWebChat(e.chat) && !log.querySelector('.msg.user'));
+      log.appendChild(el('div', 'msg user auto' + (web ? ' web' : ''),
+        (web ? '\u{1F310} ' + T.webTurn : '\u{1F319} ' + T.autoTurn) + (e.text || '')));
       scroll();
       break;
     }
@@ -1253,10 +1817,12 @@ window.addEventListener('message', (ev) => {
       scroll();
       break;
     case 'chat_reset':
+      leaveAgentView();
+      shownChat = e.chat || null;
       // Switching chats: the busy state belongs to the chat we are leaving.
       clearBusy();
       log.innerHTML = '';
-      tools = {}; curAssistant = null; curThinking = null;
+      tools = {}; asks = {}; curAssistant = null; curThinking = null;
       log.appendChild(el('div', 'notice', T.newChatNotice));
       refreshTabs();
       break;
@@ -1265,8 +1831,64 @@ window.addEventListener('message', (ev) => {
         const st = JSON.parse(e.text || '{}');
         tabsHidden = Array.isArray(st.hidden) ? st.hidden : [];
         tabsOrder = Array.isArray(st.order) ? st.order : [];
+        agentsCollapsed = !!st.agents_collapsed;
       } catch (err) { /* first run — defaults are fine */ }
       renderTabs();
+      renderAgents();
+      break;
+    }
+    case 'agents': {
+      agentsData = Array.isArray(e.items) ? e.items.filter(a => a && a.id) : [];
+      for (const id of Object.keys(agentsStopping)) {
+        const r = agentRecord(id);
+        if (!r || !(r.state === 'queued' || r.state === 'running' || r.state === 'waiting')) delete agentsStopping[id];
+      }
+      for (const t of agentTabs) {
+        const r = agentRecord(t.id);
+        if (r && r.title) t.title = r.title;
+      }
+      // The transcript on screen follows its subagent while it works.
+      if (viewAgent && !pendingAgent && !agentReloading) {
+        const r = agentRecord(viewAgent);
+        if (r && r.updated_at && r.updated_at !== viewAgentStamp) {
+          viewAgentStamp = r.updated_at;
+          agentReloading = true;
+          vscode.postMessage({ type: 'agent_command', name: 'open_agent', value: viewAgent });
+        }
+      }
+      renderAgents();
+      renderTabs();
+      break;
+    }
+    case 'agent_loaded': {
+      // Only what this panel asked for: in a browser every tab gets every
+      // event, and another tab's transcript must not take this one over.
+      const want = pendingAgent ? e.id === pendingAgent : e.id === viewAgent;
+      if (!e.id || !want) break;
+      const fresh = e.id !== viewAgent;
+      const atEnd = fresh || log.scrollTop + log.clientHeight >= log.scrollHeight - 40;
+      // Open questions stay answerable across the redraw.
+      const keep = Object.keys(asks).map(id => [id, asks[id]])
+        .filter(p => p[1] && !p[1].classList.contains('answered'));
+      pendingAgent = null;
+      agentReloading = false;
+      viewAgent = e.id;
+      if (fresh) { const r = agentRecord(e.id); viewAgentStamp = r && r.updated_at ? r.updated_at : ''; }
+      const tab = agentTabs.find(a => a.id === e.id);
+      if (!tab) agentTabs.push({ id: e.id, title: e.title || e.id });
+      else if (e.title) tab.title = e.title;
+      document.body.classList.add('agentview');
+      log.innerHTML = '';
+      tools = {}; asks = {}; curAssistant = null; curThinking = null;
+      log.appendChild(el('div', 'notice agent-head', '\u{1F916} ' + (e.title || e.id) +
+        (e.state ? ' \u00b7 ' + agentStateLabel(e.state) : '')));
+      renderHistory(e.messages, false);
+      if (e.error) log.appendChild(el('div', 'error', e.error));
+      for (const p of keep) { log.appendChild(p[1]); asks[p[0]] = p[1]; }
+      for (const a of log.querySelectorAll('.msg.assistant')) decorate(a);
+      if (atEnd) scroll();
+      renderTabs();
+      renderAgents();
       break;
     }
     case 'chats':
@@ -1275,28 +1897,15 @@ window.addEventListener('message', (ev) => {
       renderTabs();
       break;
     case 'chat_loaded': {
+      leaveAgentView();
+      if (e.chat) shownChat = e.chat;
       // The chat we are leaving may still be busy — that is its state, not ours.
       // If the loaded chat is busy, the agent replays its turn right after this.
       clearBusy();
       log.innerHTML = '';
-      tools = {}; curAssistant = null; curThinking = null;
-      for (const m of e.msgs || []) {
-        if (m.role === 'user') log.appendChild(el('div', 'msg user', m.text));
-        else if (m.role === 'assistant') {
-          const a = el('div', 'msg assistant');
-          a._md = m.text || '';
-          a.innerHTML = renderMarkdown(a._md);
-          log.appendChild(a);
-        }
-        else if (m.role === 'tool') {
-          const box = el('div', 'tool');
-          const head = el('div', 'tool-head');
-          head.appendChild(el('span', 'tool-name', m.tool || ''));
-          head.appendChild(el('span', 'tool-sum', m.text || ''));
-          box.appendChild(head);
-          log.appendChild(box);
-        }
-      }
+      tools = {}; asks = {}; curAssistant = null; curThinking = null;
+      // The opening message of a chat from the site is the task itself.
+      renderHistory(e.msgs, e.origin === 'web' || isWebChat(e.chat));
       log.appendChild(el('div', 'notice', T.chatRestored));
       if (e.at) log.appendChild(wakeLine(e.at, e.text || ''));
       scroll();
@@ -1343,12 +1952,14 @@ window.addEventListener('message', (ev) => {
       document.body.classList.remove('busy');
       stopTimer();
       const box = el('div', 'error', e.text || T.agentExited);
-      const b = document.createElement('button');
-      b.textContent = T.restartBtn;
-      b.style.marginTop = '4px';
-      b.onclick = () => { vscode.postMessage({ type: 'restart' }); box.remove(); };
-      box.appendChild(document.createElement('br'));
-      box.appendChild(b);
+      if (!BROWSER) {
+        const b = document.createElement('button');
+        b.textContent = T.restartBtn;
+        b.style.marginTop = '4px';
+        b.onclick = () => { vscode.postMessage({ type: 'restart' }); box.remove(); };
+        box.appendChild(document.createElement('br'));
+        box.appendChild(b);
+      }
       log.appendChild(box);
       scroll();
       break;

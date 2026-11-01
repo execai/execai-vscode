@@ -1,3 +1,7 @@
 .protocol.cjs
 .install.cjs
 .webviewHtml.cjs
+.webviewHtml.min.cjs
+.panelLogic.cjs
+.chatView.cjs
+.browserHost.js

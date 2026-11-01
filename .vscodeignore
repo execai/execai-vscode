@@ -6,3 +6,6 @@ tsconfig.json
 *.map
 .gitignore
 docs/**
+dist/panel-browser.*.html
+_wt/**
+*.vsix
