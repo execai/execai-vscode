@@ -3,6 +3,33 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.38 — 2026-11-04
+
+### Changed
+
+- **The panel updates the agent to 7.8.** Subagents no longer stop after
+  five minutes, show how many steps they have left and can be given more on
+  the go — the 0.2.37 buttons need this agent, so an older one is replaced
+  on the next start.
+
+## 0.2.37 — 2026-11-04
+
+### Added
+
+- **Steps left for every subagent.** A working subagent in the **Agents**
+  block reads "step 12/50 · 38 left"; with 5 steps or fewer left the line
+  turns yellow.
+- **+25 steps on the go.** A button next to **Stop** gives a working
+  subagent 25 more steps at once.
+- **Continue a subagent that ran out of steps.** It is marked "hit the step
+  limit", and **Continue (+25)** picks it up from where it stopped, in the
+  same transcript.
+- **Subagent steps** in the panel menu sets how many steps new subagents
+  get (1–100, 50 by default).
+
+These need the agent 7.8 or newer; with an older agent the panel looks as
+before. The same panel in `execai ui` comes with the agent.
+
 ## 0.2.36 — 2026-11-02
 
 ### Added

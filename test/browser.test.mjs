@@ -326,17 +326,48 @@ for (const bundle of BUNDLES) {
 
   test('subagents work the same in the browser' + tag, async () => {
     const p = await started(bundle);
+    p.emit({ type: 'state', model: 'glm', source: 'execai', subagent_iter: 50 });
     p.emit({ type: 'agents', items: [{ id: 'a1', parent_chat: 'c1', title: 'Tests', state: 'running', iter: 1, max_iter: 15 }] });
     const row = p.byId('agents').querySelector('[data-agent="a1"]');
     assert.ok(row);
     await settle(p);
+    row.querySelector('.ag-more').onclick({ stopPropagation() {} });
     row.querySelector('.ag-stop').onclick({ stopPropagation() {} });
     row.onclick();
     await p.flush();
     assert.deepEqual(p.ins(), [
+      { type: 'command', name: 'extend_agent', value: 'a1' },
       { type: 'command', name: 'stop_agent', value: 'a1' },
       { type: 'command', name: 'open_agent', value: 'a1' },
     ]);
+  });
+
+  test('subagent steps dialog: 1 to 100, Esc sends nothing' + tag, async () => {
+    const p = await started(bundle, { lang: 'ru' });
+    p.emit({ type: 'state', model: 'glm', source: 'execai', max_iter: 50, subagent_iter: 50 });
+    const dlg = p.byId('dlg');
+    let menu = openMenu(p);
+    menu.querySelector('[data-mi="subagentiter"]').onclick();
+    await p.flush();
+    assert.equal(dlg.querySelector('.dlg-title').textContent, 'Предел шагов нового субагента');
+    const inp = dlg.querySelector('input');
+    assert.equal(inp.value, '50');
+    inp.value = '101';
+    await settle(p);
+    inp.onkeydown({ key: 'Enter', preventDefault() {} });
+    assert.equal(dlg.querySelector('.dlg-err').textContent, 'нужно число от 1 до 100');
+    inp.value = '80';
+    inp.onkeydown({ key: 'Enter', preventDefault() {} });
+    await p.flush();
+    assert.deepEqual(p.ins(), [{ type: 'command', name: 'set_subagent_iterations', value: '80' }]);
+
+    menu = openMenu(p);
+    menu.querySelector('[data-mi="subagentiter"]').onclick();
+    await settle(p);
+    for (const f of p.docListeners.keydown) f({ key: 'Escape' });
+    await p.flush();
+    assert.ok(!dlg.classList.contains('open'));
+    assert.deepEqual(p.ins(), []);
   });
 }
 

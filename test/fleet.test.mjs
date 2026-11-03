@@ -78,7 +78,9 @@ for (const bundle of BUNDLES) {
       assert.equal(r.getAttribute('data-state'), 'running');
       assert.equal(r.querySelector('.ag-st').textContent, '▶');
       assert.equal(r.querySelector('.ag-title').textContent, 'Run the tests');
-      assert.match(r.querySelector('.ag-meta').textContent, /^3\/15 · bash · 1:0[5-7]$/);
+      const steps = T.agSteps.replace('{i}', '3').replace('{m}', '15').replace('{n}', '12');
+      assert.match(r.querySelector('.ag-meta').textContent, new RegExp('^' + steps + ' · bash · 1:0[5-7]$'));
+      assert.ok(!r.querySelector('.ag-meta').classList.contains('warn'), '12 left is no warning');
       assert.ok(r.title.includes('glm-5.3') && r.title.includes('12k') && r.title.includes('go test'));
       assert.ok(row(p, 'bad').title.includes('no access'), 'the error is in the tooltip');
       assert.equal(row(p, 'bad').querySelector('.ag-st').textContent, '✗');
@@ -97,6 +99,103 @@ for (const bundle of BUNDLES) {
       assert.equal(row(p, 'a1').querySelector('.ag-stop').disabled, true);
     });
   }
+
+  for (const lang of ['en', 'ru']) {
+    test(`steps: what is left, +25 on the go, a warning near the limit (${lang})` + tag, () => {
+      const p = panel(bundle, lang);
+      const T = p.T;
+      p.post({ type: 'state', model: 'm', source: 's', subagent_iter: 50 });
+      p.post({ type: 'agents', items: [
+        AG({ iter: 12, max_iter: 50 }),
+        AG({ id: 'a2', iter: 46, max_iter: 50, started_at: ago(30) }),
+      ] });
+      const meta = (id) => row(p, id).querySelector('.ag-meta');
+      assert.ok(meta('a1').textContent.startsWith(
+        T.agSteps.replace('{i}', '12').replace('{m}', '50').replace('{n}', '38') + ' · bash'));
+      assert.ok(!meta('a1').classList.contains('warn'));
+      // 4 left: drawn as a warning.
+      assert.ok(meta('a2').textContent.startsWith(
+        T.agSteps.replace('{i}', '46').replace('{m}', '50').replace('{n}', '4')));
+      assert.ok(meta('a2').classList.contains('warn'));
+
+      // +25 next to Stop; it posts extend_agent and does not open the transcript.
+      const more = row(p, 'a1').querySelector('.ag-more');
+      assert.equal(more.textContent, T.agentMore);
+      assert.equal(more.title, T.agentMoreTitle);
+      p.sent.length = 0;
+      more.onclick({ stopPropagation() {} });
+      assert.deepEqual(p.sent, [{ type: 'agent_command', name: 'extend_agent', value: 'a1' }]);
+      assert.equal(more.disabled, true, 'a double click does not give twice as much');
+      // The limit grew: the snapshot redraws the row, the button is back.
+      p.post({ type: 'agents', items: [AG({ iter: 13, max_iter: 75 })] });
+      assert.ok(meta('a1').textContent.startsWith(
+        T.agSteps.replace('{i}', '13').replace('{m}', '75').replace('{n}', '62')));
+      assert.ok(!row(p, 'a1').querySelector('.ag-more').disabled);
+      // A subagent being stopped gets no more steps.
+      row(p, 'a1').querySelector('.ag-stop').onclick({ stopPropagation() {} });
+      p.post({ type: 'agents', items: [AG({ iter: 13, max_iter: 75 })] });
+      assert.equal(row(p, 'a1').querySelector('.ag-more').disabled, true);
+    });
+
+    test(`a subagent that hit its step limit can be continued (${lang})` + tag, () => {
+      const p = panel(bundle, lang);
+      const T = p.T;
+      p.post({ type: 'state', model: 'm', source: 's', subagent_iter: 50 });
+      p.post({ type: 'agents', items: [
+        AG({ state: 'done', exhausted: true, iter: 50, max_iter: 50, started_at: ago(300), finished_at: ago(200) }),
+        AG({ id: 'ok', state: 'done', iter: 7, max_iter: 50, started_at: ago(300), finished_at: ago(250) }),
+      ] });
+      const r = row(p, 'a1');
+      assert.equal(r.getAttribute('data-state'), 'done');
+      assert.equal(r.querySelector('.ag-meta').textContent, '50/50 · ' + T.agExhausted + ' · bash · 1:40');
+      assert.ok(r.querySelector('.ag-meta').classList.contains('warn'));
+      assert.ok(r.title.includes(T.agExhausted), 'the tooltip says why it stopped');
+      assert.equal(r.querySelector('.ag-stop'), null);
+      const cont = r.querySelector('.ag-more');
+      assert.equal(cont.textContent, T.agentContinue);
+      assert.equal(cont.title, T.agentContinueTitle);
+      // A plain finish has neither the mark nor the button.
+      assert.equal(row(p, 'ok').querySelector('.ag-meta').textContent, '7/50 · bash · 50' + T.secs);
+      assert.equal(row(p, 'ok').querySelector('.ag-more'), null);
+
+      p.sent.length = 0;
+      cont.onclick({ stopPropagation() {} });
+      assert.deepEqual(p.sent, [{ type: 'agent_command', name: 'extend_agent', value: 'a1' }]);
+      // Continued: running again, with what is left and the usual buttons.
+      p.post({ type: 'agents', items: [AG({ state: 'running', exhausted: false, iter: 50, max_iter: 75 })] });
+      assert.ok(row(p, 'a1').querySelector('.ag-meta').textContent.startsWith(
+        T.agSteps.replace('{i}', '50').replace('{m}', '75').replace('{n}', '25')));
+      assert.equal(row(p, 'a1').querySelector('.ag-more').textContent, T.agentMore);
+      assert.ok(row(p, 'a1').querySelector('.ag-stop'));
+    });
+  }
+
+  test('an older agent (no subagent_iter): no +25 and no subagent steps in the menu' + tag, () => {
+    const p = panel(bundle);
+    p.post({ type: 'state', model: 'm', source: 's', max_iter: 50 });
+    p.post({ type: 'agents', items: [AG()] });
+    assert.equal(row(p, 'a1').querySelector('.ag-more'), null);
+    assert.ok(row(p, 'a1').querySelector('.ag-stop'), 'Stop is still there');
+    p.byId('status').onclick();
+    assert.equal(p.byId('menu').querySelector('[data-mi="subagentiter"]'), null);
+    // A newer agent comes up: the buttons show up without a new snapshot.
+    p.post({ type: 'state', model: 'm', source: 's', max_iter: 50, subagent_iter: 40 });
+    assert.ok(row(p, 'a1').querySelector('.ag-more'));
+  });
+
+  test('the menu has "Subagent steps" with the current value; a click asks for a number' + tag, () => {
+    const p = panel(bundle);
+    p.post({ type: 'state', model: 'm', source: 's', max_iter: 50, subagent_iter: 40 });
+    p.byId('status').onclick();
+    const item = p.byId('menu').querySelector('[data-mi="subagentiter"]');
+    assert.ok(item);
+    assert.ok(item.textContent.includes(p.T.mSubagentIter) && item.textContent.includes('40'));
+    p.sent.length = 0;
+    item.onclick();
+    assert.deepEqual(p.sent.filter((m) => m.type === 'agent_command'),
+      [{ type: 'agent_command', name: 'set_subagent_iterations' }]);
+    assert.ok(!p.byId('menu').classList.contains('open'));
+  });
 
   test('the block folds and unfolds; the choice is saved with the tabs' + tag, () => {
     const p = panel(bundle);
@@ -270,6 +369,41 @@ test('fleetView: counts, order, unknown states and missing times', () => {
   assert.equal(v.rows[2].meta, '1:30:05');
   assert.equal(v.rows[0].title, 'r', 'no title — the id');
   assert.deepEqual(fleetView(null, now, T).rows, []);
+});
+
+test('fleetView: steps left, the warning at 5 or fewer, exhausted', () => {
+  const { fleetView } = load('./.panelLogic.cjs');
+  const T = { agSteps: 'step {i}/{m} · {n} left', agExhausted: 'hit the step limit', agDone: 'done' };
+  const now = Date.parse('2026-11-01T12:00:00Z');
+  const by = (v) => Object.fromEntries(v.rows.map((r) => [r.id, r]));
+  const v = by(fleetView([
+    { id: 'r12', state: 'running', iter: 12, max_iter: 50 },
+    { id: 'r6', state: 'running', iter: 44, max_iter: 50 },
+    { id: 'w5', state: 'waiting', iter: 45, max_iter: 50 },
+    { id: 'q0', state: 'queued', iter: 0, max_iter: 50 },
+    { id: 'over', state: 'running', iter: 52, max_iter: 50 },
+    { id: 'nomax', state: 'running', iter: 3 },
+    { id: 'ex', state: 'done', iter: 50, max_iter: 50, exhausted: true },
+    { id: 'fin', state: 'done', iter: 7, max_iter: 50 },
+    // A continued record that still carries the flag is going, not exhausted.
+    { id: 'back', state: 'running', iter: 50, max_iter: 75, exhausted: true },
+  ], now, T));
+  assert.equal(v.r12.meta, 'step 12/50 · 38 left');
+  assert.deepEqual([v.r12.left, v.r12.low], [38, false]);
+  assert.deepEqual([v.r6.left, v.r6.low], [6, false], '6 left — not yet');
+  assert.deepEqual([v.w5.left, v.w5.low], [5, true], '5 left — a warning');
+  assert.equal(v.q0.meta, 'step 0/50 · 50 left');
+  assert.deepEqual([v.over.left, v.over.low], [0, true], 'never below zero');
+  assert.deepEqual([v.nomax.meta, v.nomax.left, v.nomax.low], ['3', -1, false], 'no limit — as before');
+  assert.equal(v.ex.meta, '50/50 · hit the step limit');
+  assert.deepEqual([v.ex.exhausted, v.ex.active, v.ex.low, v.ex.left], [true, false, false, -1]);
+  assert.ok(v.ex.tip.startsWith('done · hit the step limit'));
+  assert.equal(v.fin.meta, '7/50');
+  assert.equal(v.fin.exhausted, false);
+  assert.deepEqual([v.back.exhausted, v.back.meta], [false, 'step 50/75 · 25 left']);
+  // Without the strings (an older bundle) the English defaults are used.
+  const bare = fleetView([{ id: 'x', state: 'running', iter: 1, max_iter: 2 }], now, {});
+  assert.equal(bare.rows[0].meta, 'step 1/2 · 1 left');
 });
 
 test('the fleet builder is bound to a name in the panel', () => {

@@ -604,6 +604,7 @@ export class PanelCore {
         }
         if (m.name === 'connect') { void this.connectFlow(m.value || ''); break; }
         if (m.name === 'set_max_iterations' && !m.value) { void this.maxIterFlow(); break; }
+        if (m.name === 'set_subagent_iterations' && !m.value) { void this.subagentIterFlow(); break; }
         if (m.name === 'cancel_wakeup' || m.name === 'wake_now') {
           agent.sendCommand(m.name, m.value || this.activeChat || '');
           break;
@@ -763,5 +764,22 @@ export class PanelCore {
         /^[1-9]\d*$/.test(t.trim()) ? null : l10n.t('a positive number is required'),
     });
     if (v) this.agent()?.sendCommand('set_max_iterations', v.trim());
+  }
+
+  /** Step limit of a new subagent — 1..100; the agent keeps it in its config. */
+  async subagentIterFlow(): Promise<void> {
+    const l10n = this.h.l10n;
+    const cur = this.lastState?.subagent_iter ?? 50;
+    const v = await this.h.input({
+      title: l10n.t('Step limit of a new subagent'),
+      prompt: l10n.t('From 1 to 100. A running subagent can be given more steps in the Agents block.'),
+      value: String(cur),
+      ignoreFocusOut: true,
+      validateInput: (t) => {
+        const n = /^\d+$/.test(t.trim()) ? Number(t.trim()) : 0;
+        return n >= 1 && n <= 100 ? null : l10n.t('a number from 1 to 100 is required');
+      },
+    });
+    if (v) this.agent()?.sendCommand('set_subagent_iterations', String(Number(v.trim())));
   }
 }

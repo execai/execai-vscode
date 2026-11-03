@@ -298,9 +298,36 @@ test('the panel commands for subagents go to the agent as they are', () => {
   p.fromWebview({ type: 'agent_command', name: 'open_agent', value: 'a1' });
   p.fromWebview({ type: 'agent_command', name: 'stop_agent', value: 'a1' });
   p.fromWebview({ type: 'agent_command', name: 'list_agents' });
+  p.fromWebview({ type: 'agent_command', name: 'extend_agent', value: 'a1' });
   assert.deepEqual(sent, [
     { name: 'open_agent', value: 'a1' },
     { name: 'stop_agent', value: 'a1' },
     { name: 'list_agents', value: undefined },
+    { name: 'extend_agent', value: 'a1' },
   ]);
+});
+
+test('subagent steps: an input box from 1 to 100, the current value from state', async () => {
+  const { p, sent, ev } = setup();
+  ev({ type: 'state', model: 'glm', source: 'execai', subagent_iter: 40 });
+  const boxes = [];
+  const answers = ['30', undefined];
+  vscodeStub.window.showInputBox = async (opts) => { boxes.push(opts); return answers.shift(); };
+  try {
+    p.fromWebview({ type: 'agent_command', name: 'set_subagent_iterations' });
+    await flush();
+    assert.equal(boxes[0].value, '40');
+    const bad = (t) => boxes[0].validateInput(t);
+    assert.ok(bad('0') && bad('101') && bad('ten') && bad(''));
+    assert.equal(bad('1'), null);
+    assert.equal(bad(' 100 '), null);
+    assert.deepEqual(sent, [{ name: 'set_subagent_iterations', value: '30' }]);
+    // Esc: nothing is sent.
+    sent.length = 0;
+    p.fromWebview({ type: 'agent_command', name: 'set_subagent_iterations' });
+    await flush();
+    assert.deepEqual(sent, []);
+  } finally {
+    delete vscodeStub.window.showInputBox;
+  }
 });

@@ -104,8 +104,12 @@ export interface AgentRecord {
   /** queued | running | waiting | done | failed | cancelled */
   state?: string;
   mode?: string;
+  /** Steps made so far, a continuation included. */
   iter?: number;
+  /** The step limit; grows when the subagent is given more steps. */
   max_iter?: number;
+  /** Finished (state "done") because it ran out of steps: extend_agent continues it. */
+  exhausted?: boolean;
   last_tool?: string;
   started_at?: string;
   updated_at?: string;
@@ -126,8 +130,15 @@ export interface FleetRow {
   /** Still going: queued, running or waiting for an answer. */
   active: boolean;
   icon: string;
-  /** "3/15 · bash · 1:05" — iteration, last tool, how long it has run. */
+  /** "step 3/50 · 47 left · bash · 1:05" while it goes, "3/50 · bash · 1:05"
+   *  once finished — steps, last tool, how long it has run. */
   meta: string;
+  /** Steps left while it goes; -1 when the limit is unknown or it has finished. */
+  left: number;
+  /** Going and 5 steps or fewer left: drawn as a warning. */
+  low: boolean;
+  /** Ran out of steps (see AgentRecord.exhausted): can be continued. */
+  exhausted: boolean;
   /** The tooltip: state, model, tokens, the last words, the error. */
   tip: string;
   parent: string;
@@ -149,7 +160,8 @@ export interface FleetView {
  * newest first), counts for the header and per-chat badges.
  *
  * An unknown state (a newer agent may add one) is drawn neutrally and counted
- * nowhere; a missing time just leaves the duration out.
+ * nowhere; a missing time just leaves the duration out. A row still going
+ * says how many steps it has left; one that ran out of steps says so.
  */
 export function fleetView(
   items: AgentRecord[] | null | undefined,
@@ -196,15 +208,25 @@ export function fleetView(
     } else if (state === 'done') out.done++;
     else if (state === 'failed') out.failed++;
 
+    // A record that went back to work after a continuation is no longer exhausted.
+    const exhausted = !active && !!a.exhausted;
+    let left = -1;
     const meta: string[] = [];
-    if (a.max_iter) meta.push((a.iter || 0) + '/' + a.max_iter);
+    if (a.max_iter && active) {
+      // The limit grows on the go, so what is left matters more than the step.
+      left = Math.max(0, a.max_iter - (a.iter || 0));
+      meta.push((T.agSteps || 'step {i}/{m} · {n} left')
+        .replace('{i}', String(a.iter || 0)).replace('{m}', String(a.max_iter)).replace('{n}', String(left)));
+    } else if (a.max_iter) meta.push((a.iter || 0) + '/' + a.max_iter);
     else if (a.iter) meta.push(String(a.iter));
+    if (exhausted) meta.push(T.agExhausted || 'hit the step limit');
     if (a.last_tool) meta.push(a.last_tool);
     const start = ms(a.started_at);
     const end = active ? now : ms(a.finished_at || a.updated_at);
     if (!isNaN(start) && !isNaN(end)) meta.push(dur((end - start) / 1000));
 
     const tip: string[] = [LABELS[state] || state];
+    if (exhausted) tip[0] += ' · ' + (T.agExhausted || 'hit the step limit');
     const who = [a.model, a.source].filter(Boolean).join(' · ');
     if (who) tip[0] += ' · ' + who;
     if (a.prompt_tokens) tip[0] += ' · ' + tokens(a.prompt_tokens) + ' ' + (T.agTokens || 'tokens');
@@ -218,6 +240,9 @@ export function fleetView(
       active,
       icon: ICONS[state] || '•',
       meta: meta.join(' · '),
+      left,
+      low: left >= 0 && left <= 5,
+      exhausted,
       tip: tip.join('\n'),
       parent: a.parent_chat || '',
       updated: a.updated_at || '',

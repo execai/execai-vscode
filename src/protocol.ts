@@ -61,6 +61,9 @@ export interface AgentEvent {
   user?: string;
   effort?: string;
   max_iter?: number;
+  /** state: the step limit a new subagent gets; absent on an older agent,
+   *  which also knows neither extend_agent nor set_subagent_iterations. */
+  subagent_iter?: number;
   msgs?: { role: string; tool?: string; text: string }[];
   /** chat_loaded: a turn is still running in the loaded chat */
   busy?: boolean;

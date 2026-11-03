@@ -43,6 +43,7 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     mConnect: 'Connect a source',
     mEffort: 'Reasoning level',
     mMaxIter: 'Iteration limit',
+    mSubagentIter: 'Subagent steps',
     mLogout: 'Sign out of ExecAI',
     mLogin: 'Sign in to ExecAI',
     loginNone: 'not signed in',
@@ -109,7 +110,13 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     agentsToggle: 'Subagents — click to fold or unfold',
     agentStop: 'Stop',
     agentStopTitle: 'Stop this subagent',
+    agentMore: '+25',
+    agentMoreTitle: 'Give this agent 25 more steps',
+    agentContinue: 'Continue (+25)',
+    agentContinueTitle: 'The agent hit its step limit — continue from where it stopped for 25 more steps',
     agentOpenTitle: 'Click to open what it has done (read-only)',
+    agSteps: 'step {i}/{m} · {n} left',
+    agExhausted: 'hit the step limit',
     agQueued: 'queued',
     agRunning: 'working',
     agWaiting: 'waiting for your answer',
@@ -142,6 +149,7 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     mConnect: 'Подключить источник',
     mEffort: 'Уровень рассуждения',
     mMaxIter: 'Предел итераций',
+    mSubagentIter: 'Шагов субагенту',
     mLogout: 'Выйти из ExecAI',
     mLogin: 'Войти в ExecAI',
     loginNone: 'не выполнен',
@@ -208,7 +216,13 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     agentsToggle: 'Субагенты — клик, чтобы свернуть или развернуть',
     agentStop: 'Остановить',
     agentStopTitle: 'Остановить этого субагента',
+    agentMore: '+25',
+    agentMoreTitle: 'Дать агенту ещё 25 шагов',
+    agentContinue: 'Продолжить (+25)',
+    agentContinueTitle: 'Агент упёрся в предел шагов — продолжить с того же места ещё на 25 шагов',
     agentOpenTitle: 'Клик — открыть наработанное (только чтение)',
+    agSteps: 'шаг {i}/{m} · ещё {n}',
+    agExhausted: 'упёрся в предел шагов',
     agQueued: 'в очереди',
     agRunning: 'работает',
     agWaiting: 'ждёт твоего ответа',
@@ -286,6 +300,7 @@ const THEME_DEFAULTS: Record<string, [string, string]> = {
   'textCodeBlock-background': ['#f2f2f2', '#2b2b2b'],
   'progressBar-background': ['#005fb8', '#0078d4'],
   'inputValidation-warningBorder': ['#b89500', '#b89500'],
+  'editorWarning-foreground': ['#bf8803', '#cca700'],
   'toolbar-hoverBackground': ['#b8b8b850', '#5a5d5e50'],
   'scrollbarSlider-background': ['#64646466', '#79797966'],
   'scrollbarSlider-hoverBackground': ['#646464b3', '#646464b3'],
@@ -773,10 +788,12 @@ function panelPage(code: ChatLang, o: { nonce: string; browser?: { hostJs: strin
   #agents .ag-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #agents .ag-meta { flex: 0 1 auto; min-width: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; }
-  #agents .ag-stop { flex: 0 0 auto; font: inherit; font-size: 10.5px; padding: 1px 7px; border-radius: 10px; cursor: pointer;
+  /* Few steps left, or none: the agent may stop before it is done. */
+  #agents .ag-meta.warn { color: var(--vscode-editorWarning-foreground, #b89500); }
+  #agents .ag-stop, #agents .ag-more { flex: 0 0 auto; font: inherit; font-size: 10.5px; padding: 1px 7px; border-radius: 10px; cursor: pointer;
     border: 1px solid var(--vscode-button-border, transparent);
     background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-  #agents .ag-stop:disabled { opacity: .5; cursor: default; }
+  #agents .ag-stop:disabled, #agents .ag-more:disabled { opacity: .5; cursor: default; }
   #tabs .tab b.agents { opacity: .85; font-variant-numeric: tabular-nums; }
   #tabs .tab.agent span { font-style: italic; }
   /* A subagent's transcript is read-only: no input, a way back instead. */
@@ -1124,9 +1141,13 @@ function renderAgents() {
       row.title = r.tip + '\\n' + T.agentOpenTitle;
       row.appendChild(el('span', 'ag-st', r.icon));
       row.appendChild(el('span', 'ag-title', r.title));
-      const meta = el('span', 'ag-meta', r.meta);
+      const meta = el('span', 'ag-meta' + (r.low || r.exhausted ? ' warn' : ''), r.meta);
       row.appendChild(meta);
       agentRowMeta[r.id] = meta;
+      // +25 needs an agent that knows extend_agent: it is the one that reports
+      // subagent_iter in its state. exhausted alone is proof enough.
+      if (r.active && stateData.subagentIter) row.appendChild(agentMoreBtn(r.id, T.agentMore, T.agentMoreTitle));
+      if (r.exhausted) row.appendChild(agentMoreBtn(r.id, T.agentContinue, T.agentContinueTitle));
       if (r.active) {
         const b = el('button', 'ag-stop', T.agentStop);
         b.title = T.agentStopTitle;
@@ -1148,6 +1169,21 @@ function renderAgents() {
   // the rows every second would swallow a click landing mid-rebuild.
   if (v.running && !agentsTick) agentsTick = setInterval(tickAgents, 1000);
   else if (!v.running && agentsTick) { clearInterval(agentsTick); agentsTick = null; }
+}
+// More steps for a subagent: +25 while it goes, or a continuation of one that
+// hit its limit — both are extend_agent. The agent answers with a notice and a
+// fresh snapshot; until then a second click would give twice as much.
+function agentMoreBtn(id, label, title) {
+  const b = el('button', 'ag-more', label);
+  b.title = title;
+  if (agentsStopping[id]) b.disabled = true;
+  b.onclick = (ev) => {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    b.disabled = true;
+    setTimeout(() => { b.disabled = !!agentsStopping[id]; }, 1500);
+    vscode.postMessage({ type: 'agent_command', name: 'extend_agent', value: id });
+  };
+  return b;
 }
 function tickAgents() {
   for (const r of fleetView(agentsData, Date.now(), T).rows) {
@@ -1334,7 +1370,7 @@ const menu = document.getElementById('menu');
 const statusEl = document.getElementById('status');
 let stateData = { model: '', source: '', models: [], sources: [],
                    efforts: [], connectable: [], securities: [], security: '',
-                   user: '', effort: '', maxIter: 0 };
+                   user: '', effort: '', maxIter: 0, subagentIter: 0 };
 let chatsData = [];
 let menuView = null; // null | 'root' | 'models' | 'sources' | 'chats'
 
@@ -1392,6 +1428,13 @@ function menuRoot() {
     closeMenu();
     vscode.postMessage({ type: 'agent_command', name: 'set_max_iterations' });
   }, false, 'maxiter'));
+  // An older agent does not report it and would not take the command.
+  if (stateData.subagentIter) {
+    menu.appendChild(mi(T.mSubagentIter, String(stateData.subagentIter), () => {
+      closeMenu();
+      vscode.postMessage({ type: 'agent_command', name: 'set_subagent_iterations' });
+    }, false, 'subagentiter'));
+  }
   menu.appendChild(el('div', 'sep'));
   if (stateData.user) {
     menu.appendChild(mi(T.mLogout, stateData.user, () => {
@@ -1913,17 +1956,22 @@ window.addEventListener('message', (ev) => {
       refreshTabs();
       break;
     }
-    case 'state':
+    case 'state': {
+      const hadSub = !!stateData.subagentIter;
       stateData = { model: e.model || '', source: e.source || '',
                     models: e.models || [], sources: e.sources || [],
                     efforts: e.efforts || [], connectable: e.connectable || [],
                     securities: e.securities || [], security: e.security || '',
-                    user: e.user || '', effort: e.effort || '', maxIter: e.max_iter || 0 };
+                    user: e.user || '', effort: e.effort || '', maxIter: e.max_iter || 0,
+                    subagentIter: e.subagent_iter || 0 };
       renderStatus();
+      // The +25 buttons come and go with subagent_iter.
+      if (agentsData && hadSub !== !!stateData.subagentIter) renderAgents();
       // redraw whichever menu view is open with the hot data
       if (menuView === 'root') menuRoot();
       else if (menuView) menuList(menuView);
       break;
+    }
     case 'login_start': {
       // The browser opens by itself, but the link must survive on its own:
       // over SSH or on a headless box nothing opens, and the sign-in may
