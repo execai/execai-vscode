@@ -89,6 +89,10 @@ export interface AgentEvent {
   messages?: { role: string; tool?: string; text: string }[];
   title?: string;
   error?: string;
+  /** machine_state: this machine, the getting-started steps, the phone link (E105) — see parseMachineState */
+  machine?: unknown;
+  tutorial?: unknown;
+  phone_url?: unknown;
 }
 
 export interface EditorCtx {
@@ -284,6 +288,141 @@ export function firstWords(text: string, maxWords = 8, maxChars = 60): string {
     n++;
   }
   return out;
+}
+
+// ── the machine card and the getting-started steps (E105) ───────
+//
+// On the machine_state command, and by itself after a sign-in, a sign-out,
+// a connect, a disconnect or a change of sync, the agent describes this
+// machine: what it is, who is signed in, which model sources answered, what
+// sync carries, whether the web and the phone can reach it — plus the
+// getting-started steps with their ticks and the phone link.
+//
+// An older agent knows no such command: it answers with an error (or not at
+// all), and the panel then shows nothing of it. Every field is optional on
+// the wire; parseMachineState fills in safe defaults instead of guessing.
+
+/** The getting-started steps, in the order they are shown. */
+export const TUTORIAL_STEP_IDS = ['login', 'models', 'sync', 'project', 'phone'] as const;
+
+export interface MachineSource {
+  id: string;
+  title: string;
+  /** The source answered its last check. */
+  alive: boolean;
+  /** When it was checked (RFC 3339), '' — unknown. */
+  checked_at: string;
+}
+
+export interface MachineSync {
+  enabled: boolean;
+  last_push_at: string;
+  /** The config with the provider keys travels (encrypted with the sync password). */
+  config: boolean;
+  personal_memory_files: number;
+  projects: number;
+  /** Which projects this machine syncs: all | selected | none; '' — not said. */
+  mode: string;
+}
+
+export interface MachineInfo {
+  id: string;
+  name: string;
+  os: string;
+  version: string;
+  logged_in: boolean;
+  email_masked: string;
+  plan: string;
+  sources: MachineSource[];
+  sync: MachineSync;
+  presence: { listener_running: boolean; reachable_from_web: boolean };
+}
+
+export interface TutorialStep {
+  id: string;
+  done: boolean;
+}
+
+export interface MachineState {
+  machine: MachineInfo;
+  /** Known steps only, in TUTORIAL_STEP_IDS order; [] — the agent sent none. */
+  tutorial: TutorialStep[];
+  /** The web chat with this machine selected; '' — none, or not a web link. */
+  phone_url: string;
+}
+
+function obj(v: unknown): Record<string, unknown> {
+  return v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+}
+
+/** A count from the wire: a non-negative integer, 0 for anything else. */
+function count(v: unknown): number {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+/**
+ * The machine_state event, normalized; null for any other event or one
+ * without a machine. Flags count only when they are a real true: a wrong
+ * tick (or "you are signed in") is worse than a missing one.
+ */
+export function parseMachineState(e: AgentEvent): MachineState | null {
+  if (e.type !== 'machine_state') return null;
+  const raw = e.machine;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const m = raw as Record<string, unknown>;
+  const sources: MachineSource[] = [];
+  for (const v of Array.isArray(m.sources) ? m.sources : []) {
+    const o = obj(v);
+    const id = str(o.id);
+    if (!id) continue;
+    sources.push({ id, title: str(o.title) || str(o.label) || id, alive: o.alive === true, checked_at: str(o.checked_at) });
+  }
+  const sy = obj(m.sync);
+  const mode = str(sy.mode);
+  const pr = obj(m.presence);
+  const machine: MachineInfo = {
+    id: str(m.id),
+    name: str(m.name),
+    os: str(m.os),
+    version: str(m.version),
+    logged_in: m.logged_in === true,
+    email_masked: str(m.email_masked),
+    plan: str(m.plan),
+    sources,
+    sync: {
+      enabled: sy.enabled === true,
+      last_push_at: str(sy.last_push_at),
+      config: sy.config === true,
+      personal_memory_files: count(sy.personal_memory_files),
+      projects: count(sy.projects),
+      mode: mode === 'all' || mode === 'selected' || mode === 'none' ? mode : '',
+    },
+    presence: { listener_running: pr.listener_running === true, reachable_from_web: pr.reachable_from_web === true },
+  };
+  // The steps come as {steps: [...]}; a bare list is taken too.
+  const t = e.tutorial;
+  const list = Array.isArray(t) ? t : Array.isArray(obj(t).steps) ? obj(t).steps as unknown[] : [];
+  const seen = new Map<string, boolean>();
+  for (const v of list) {
+    const o = obj(v);
+    const id = str(o.id);
+    if ((TUTORIAL_STEP_IDS as readonly string[]).includes(id) && !seen.has(id)) seen.set(id, o.done === true);
+  }
+  const tutorial = TUTORIAL_STEP_IDS.filter((id) => seen.has(id)).map((id) => ({ id, done: !!seen.get(id) }));
+  // The link becomes a QR code and an "open" button: a web link or nothing.
+  const url = typeof e.phone_url === 'string' ? e.phone_url.trim() : '';
+  const phone_url = /^https?:\/\/[^\s/]+(\/\S*)?$/i.test(url) ? url : '';
+  return { machine, tutorial, phone_url };
+}
+
+/**
+ * An older agent answers an unknown command with a process-wide error that
+ * names it ("неизвестная команда: machine_state"). That error is about the
+ * panel asking, not about anything the user did, so it is not shown.
+ */
+export function isMachineStateRefusal(e: AgentEvent): boolean {
+  return e.type === 'error' && !e.chat && /\bmachine_state\b/.test(e.text || '');
 }
 
 /**

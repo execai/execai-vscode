@@ -290,7 +290,7 @@ test('list_agents only to an agent that reported a fleet', () => {
   ev({ type: 'agents', items: [] });
   sent.length = 0;
   ev({ type: 'ready', model: 'glm', source: 'execai', protocol: 1 });
-  assert.deepEqual(sent.map((c) => c.name), ['state', 'resume_last', 'list_agents']);
+  assert.deepEqual(sent.map((c) => c.name), ['state', 'resume_last', 'machine_state', 'list_agents']);
 });
 
 test('the panel commands for subagents go to the agent as they are', () => {

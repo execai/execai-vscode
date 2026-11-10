@@ -250,3 +250,230 @@ export function fleetView(
   }
   return out;
 }
+
+// ── getting started and the machine card (E105) ─────────────────
+
+/** machine_state as the extension forwards it to the panel (see parseMachineState). */
+export interface MachineView {
+  machine: {
+    id: string;
+    name: string;
+    os: string;
+    version: string;
+    logged_in: boolean;
+    email_masked: string;
+    plan: string;
+    sources: { id: string; title: string; alive: boolean; checked_at: string }[];
+    sync: {
+      enabled: boolean;
+      last_push_at: string;
+      config: boolean;
+      personal_memory_files: number;
+      projects: number;
+      mode: string;
+    };
+    presence: { listener_running: boolean; reachable_from_web: boolean };
+  };
+  tutorial: { id: string; done: boolean }[];
+  phone_url: string;
+}
+
+/**
+ * Whether "Getting started" is on screen. By itself: the chat is empty, a
+ * step is left and the user has not closed it. Asked for (the menu item, the
+ * command): whatever the chat and the ticks. Never without steps — an older
+ * agent sends none, and there is nothing to tick.
+ */
+export function showStart(o: {
+  steps: { done: boolean }[];
+  dismissed: boolean;
+  chatEmpty: boolean;
+  forced: boolean;
+}): boolean {
+  if (!o.steps || !o.steps.length) return false;
+  if (o.forced) return true;
+  if (o.dismissed || !o.chatEmpty) return false;
+  return o.steps.some((s) => !s.done);
+}
+
+/** One step of "Getting started", ready to draw. */
+export interface StartStep {
+  id: string;
+  done: boolean;
+  title: string;
+  /** One phrase: what the step is for. */
+  why: string;
+  lines: string[];
+  /** What the button does — login | connect | sync_on | bind | qr; '' — no button. */
+  action: string;
+  actionLabel: string;
+}
+
+/**
+ * The steps the agent reported, in words: the title, why, what is known
+ * about it (the account, which source answered, what sync carries, the
+ * project, the reach) and the one button that does it. A step done loses
+ * its button — except the phone code, which is useful any time.
+ */
+export function startSteps(
+  ms: MachineView | null,
+  bound: { name: string } | null | undefined,
+  T: Record<string, string>,
+  now: number,
+): StartStep[] {
+  if (!ms) return [];
+  const ago = (iso: string) => {
+    const t = iso ? Date.parse(iso) : NaN;
+    if (isNaN(t)) return '';
+    const s = Math.max(0, (now - t) / 1000);
+    if (s < 60) return T.agoNow;
+    if (s < 3600) return Math.floor(s / 60) + ' ' + T.agoMin;
+    if (s < 86400) return Math.floor(s / 3600) + ' ' + T.agoHour;
+    return Math.floor(s / 86400) + ' ' + T.agoDay;
+  };
+  const m = ms.machine;
+  const out: StartStep[] = [];
+  for (const st of ms.tutorial || []) {
+    const s: StartStep = { id: st.id, done: !!st.done, title: '', why: '', lines: [], action: '', actionLabel: '' };
+    const todo = (action: string, label: string) => {
+      if (!s.done) { s.action = action; s.actionLabel = label; }
+    };
+    switch (st.id) {
+      case 'login':
+        s.title = T.stLogin; s.why = T.stLoginWhy;
+        if (m.logged_in && m.email_masked) s.lines.push(m.email_masked);
+        todo('login', T.stLoginBtn);
+        break;
+      case 'models':
+        s.title = T.stModels; s.why = T.stModelsWhy;
+        for (const src of m.sources || []) {
+          const when = ago(src.checked_at);
+          s.lines.push((src.alive ? '✓ ' : '✗ ') + src.title + ' — ' +
+            (src.alive ? T.srcAlive : T.srcDead) + (when ? ', ' + when : ''));
+        }
+        if (!(m.sources || []).length) s.lines.push(T.srcNone);
+        todo('connect', T.stModelsBtn);
+        break;
+      case 'sync': {
+        s.title = T.stSync; s.why = T.stSyncWhy;
+        if (m.sync.enabled) {
+          const when = ago(m.sync.last_push_at);
+          s.lines.push(T.rowSync + ': ' + T.syncOn + (when ? ' · ' + T.syncLast + ' ' + when : ''));
+        }
+        s.lines.push(T.syncGoes, T.syncStays, T.syncPassword);
+        if (!s.done) s.lines.push(T.stSyncCmd + 'execai sync on');
+        todo('sync_on', T.stSyncBtn);
+        break;
+      }
+      case 'project':
+        s.title = T.stProject; s.why = T.stProjectWhy;
+        s.lines.push(bound && bound.name ? T.stProjectBound + bound.name : T.stProjectNone);
+        todo('bind', T.stProjectBtn);
+        break;
+      case 'phone':
+        s.title = T.stPhone; s.why = T.stPhoneWhy;
+        // The card's lowercase phrases, as sentences here.
+        for (const t of [
+          m.presence.listener_running ? '' : T.reachNoListener,
+          m.presence.reachable_from_web ? T.reachWeb : T.reachNoWeb,
+        ]) if (t) s.lines.push(t.charAt(0).toUpperCase() + t.slice(1) + '.');
+        if (ms.phone_url) { s.action = 'qr'; s.actionLabel = T.stPhoneBtn; }
+        else s.lines.push(T.stPhoneNoLink);
+        break;
+      default:
+        continue; // a step this panel cannot explain is not drawn
+    }
+    out.push(s);
+  }
+  return out;
+}
+
+/** A row of the machine card. */
+export interface MachineRow {
+  /** Stable test anchor: the label is translated. */
+  key: string;
+  label: string;
+  value: string;
+  lines: string[];
+  /** ok — all good; warn — something wants attention; '' — neutral. */
+  tone: string;
+}
+
+/**
+ * The machine card in words: the machine, the agent version, the account
+ * and its plan, which model sources answered and when, what sync carries,
+ * and whether the web chat and the phone can reach this machine.
+ */
+export function machineRows(ms: MachineView, T: Record<string, string>, now: number): MachineRow[] {
+  const ago = (iso: string) => {
+    const t = iso ? Date.parse(iso) : NaN;
+    if (isNaN(t)) return '';
+    const s = Math.max(0, (now - t) / 1000);
+    if (s < 60) return T.agoNow;
+    if (s < 3600) return Math.floor(s / 60) + ' ' + T.agoMin;
+    if (s < 86400) return Math.floor(s / 3600) + ' ' + T.agoHour;
+    return Math.floor(s / 86400) + ' ' + T.agoDay;
+  };
+  // week_work → «Work»; an unknown plan is shown as the agent named it.
+  const planName = (p: string) => {
+    const k = String(p || '').toLowerCase().replace(/^(day|week|month|year)_/, '');
+    return k === 'start' ? T.planStart : k === 'work' ? T.planWork : k === 'max' ? T.planMax : p;
+  };
+  const m = ms.machine;
+  const rows: MachineRow[] = [];
+
+  rows.push({
+    key: 'machine', label: T.rowMachine,
+    value: [m.name, m.os].filter(Boolean).join(' · ') || '?',
+    lines: m.id ? ['id ' + m.id] : [], tone: '',
+  });
+  rows.push({ key: 'agent', label: T.rowAgent, value: m.version || '?', lines: [], tone: '' });
+  rows.push(m.logged_in
+    ? {
+      key: 'account', label: T.rowAccount,
+      value: [m.email_masked || '?', m.plan ? T.planLabel + planName(m.plan) : T.planNone].join(' · '),
+      lines: [], tone: 'ok',
+    }
+    : { key: 'account', label: T.rowAccount, value: T.accNone, lines: [], tone: 'warn' });
+
+  const sources = m.sources || [];
+  rows.push({
+    key: 'models', label: T.rowModels,
+    value: sources.length ? '' : T.srcNone,
+    lines: sources.map((src) => {
+      const when = ago(src.checked_at);
+      return (src.alive ? '✓ ' : '✗ ') + src.title + ' — ' +
+        (src.alive ? T.srcAlive : T.srcDead) + (when ? ', ' + when : '');
+    }),
+    tone: sources.length && sources.every((s) => s.alive) ? 'ok' : 'warn',
+  });
+
+  const sy = m.sync;
+  if (sy.enabled) {
+    const when = ago(sy.last_push_at);
+    const lines: string[] = [];
+    if (sy.config) lines.push(T.syncHasConfig);
+    lines.push(T.syncMemory + ': ' + (sy.personal_memory_files || 0));
+    lines.push(T.syncProjects + ': ' + (sy.projects || 0));
+    const mode = sy.mode === 'all' ? T.modeAll : sy.mode === 'selected' ? T.modeSelected : sy.mode === 'none' ? T.modeNone : '';
+    if (mode) lines.push(mode);
+    rows.push({
+      key: 'sync', label: T.rowSync,
+      value: T.syncOn + (when ? ' · ' + T.syncLast + ' ' + when : ''),
+      lines, tone: 'ok',
+    });
+  } else {
+    rows.push({ key: 'sync', label: T.rowSync, value: T.syncOff, lines: [], tone: '' });
+  }
+
+  const pr = m.presence;
+  rows.push({
+    key: 'reach', label: T.rowReach, value: '',
+    lines: [
+      pr.listener_running ? T.reachListening : T.reachNoListener,
+      pr.reachable_from_web ? T.reachWeb : T.reachNoWeb,
+    ],
+    tone: pr.listener_running && pr.reachable_from_web ? 'ok' : 'warn',
+  });
+  return rows;
+}

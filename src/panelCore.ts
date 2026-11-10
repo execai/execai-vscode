@@ -13,9 +13,26 @@
 // very class, so a routing fix lands in both at once.
 
 import {
-  AgentEvent, AgentPort, EditorCtx, InboxInfo, Workspace, PAYMENT_URL, PROTOCOL,
-  displayUrl, parseInbox, parseWorkspaces, isWeb, firstWords,
+  AgentEvent, AgentPort, EditorCtx, InboxInfo, MachineState, Workspace, PAYMENT_URL, PROTOCOL,
+  displayUrl, parseInbox, parseWorkspaces, isWeb, firstWords, parseMachineState, isMachineStateRefusal,
 } from './protocol';
+import { QrPicture, qrPicture } from './qr';
+
+/** How long the agent gets to answer machine_state before the card calls it outdated. */
+export const MACHINE_TIMEOUT_MS = 15000;
+
+/** "Getting started" closed by the user — kept for the whole profile, not per project. */
+export const START_DISMISSED_KEY = 'execai.startDismissed';
+
+/**
+ * Arguments for `execai` in a terminal, from the panel: lowercase words only
+ * (`sync on`). Anything else gives a plain terminal — the text goes into a
+ * shell, so it is never passed through as is.
+ */
+export function terminalArgs(text: string | undefined): string[] {
+  const words = (text || '').trim().split(/\s+/).filter(Boolean);
+  return words.every((w) => /^[a-z][a-z-]*$/.test(w)) ? words : [];
+}
 
 export interface PickItem {
   label: string;
@@ -65,6 +82,8 @@ export interface PanelHost {
   copy(text: string): void;
   /** Per-project storage: workspaceState in the editor, localStorage in a browser. */
   memo: { get<T>(key: string, def: T): T; set(key: string, value: unknown): void };
+  /** Storage for every project at once: globalState in the editor. Absent — memo is used. */
+  globalMemo?: { get<T>(key: string, def: T): T; set(key: string, value: unknown): void };
   pick<T extends PickItem>(items: T[], opts: PickOptions): PromiseLike<T | undefined>;
   input(opts: InputOptions): PromiseLike<string | undefined>;
   resumeLastChat(): boolean;
@@ -74,8 +93,11 @@ export interface PanelHost {
   attachPaths(paths: string[]): void;
   pasteBlob(name: string, dataURL: string): void;
   openFile(path: string, line?: string): void;
-  openTerminal(): void;
+  /** execai in a terminal; args — what to run in it (`sync on`), already checked. */
+  openTerminal(args?: string[]): void;
   checkUpdates(): void;
+  /** Install or update the agent; absent where there is nothing to update (execai ui). */
+  updateAgent?(): void;
   /**
    * The browser gets `ready` again on every reconnect of its event stream:
    * there it must reopen the chat on screen, not jump to the last one.
@@ -132,6 +154,13 @@ export class PanelCore {
   private expectNew = 0;
   private resumePending = false;
   private adopted = false;
+  // The machine card (E105). machineKnown: null — not known yet whether the
+  // agent speaks machine_state; false — it refused or stayed silent (an older
+  // agent), and it is not asked again until it restarts.
+  private machine: MachineState | null = null;
+  private machineKnown: boolean | null = null;
+  private machineTimer: ReturnType<typeof setTimeout> | null = null;
+  private qrCache: { url: string; pic: QrPicture | null } = { url: '', pic: null };
 
   /** Status line without the inbox and "turn…" suffixes. Kept as a field, not
    *  scraped back out of the text: the suffixes are translated, and a regex
@@ -308,6 +337,18 @@ export class PanelCore {
   // ── agent → panel ───────────────────────────────────────────────
 
   fromAgent(e: AgentEvent): void {
+    // The machine card: an older agent refusing the command is not an error
+    // the user has to read; the answer goes to the panel normalized.
+    if (isMachineStateRefusal(e) && this.machineKnown !== true) {
+      this.machineRefused();
+      return;
+    }
+    if (e.type === 'machine_state') {
+      const ms = parseMachineState(e);
+      if (ms) this.setMachine(ms);
+      return;
+    }
+
     // The inbox state and the project list are taken here: the panel gets the
     // inbox in one normalized shape, the list goes to the project picker.
     const inbox = parseInbox(e);
@@ -382,6 +423,9 @@ export class PanelCore {
         // want a clean slate every time.
         if (keep) agent?.sendCommand('load_chat', keep);
         else if (this.h.resumeLastChat()) agent?.sendCommand('resume_last');
+        // A new process describes its machine anew — or turns out too old to.
+        this.resetMachine();
+        this.requestMachine();
         // A restarted agent has a fleet of its own; ask for it once the agent
         // is known to speak the fleet protocol.
         if (this.fleetSeen) agent?.sendCommand('list_agents');
@@ -549,8 +593,22 @@ export class PanelCore {
         this.h.uiReady();
         const tabs = this.h.memo.get<string>('execai.tabs', '');
         if (tabs) this.h.post({ type: 'tabs_state', text: tabs });
+        this.h.post({ type: 'start_prefs', dismissed: this.globalMemo().get<boolean>(START_DISMISSED_KEY, false) });
         break;
       }
+      case 'start_dismiss':
+        this.globalMemo().set(START_DISMISSED_KEY, true);
+        this.h.post({ type: 'start_prefs', dismissed: true });
+        break;
+      case 'start_reopen':
+        this.showStart();
+        break;
+      case 'machine_refresh':
+        this.requestMachine();
+        break;
+      case 'update_agent':
+        this.h.updateAgent?.();
+        break;
       case 'send': {
         if (!this.agent()?.alive) this.h.startAgent();
         const ctx = this.h.editorContext() ?? {};
@@ -616,7 +674,7 @@ export class PanelCore {
         this.newChat();
         break;
       case 'open_terminal':
-        this.h.openTerminal();
+        this.h.openTerminal(terminalArgs(m.text));
         break;
       case 'check_updates':
         this.h.checkUpdates();
@@ -649,6 +707,76 @@ export class PanelCore {
   newChat(): void {
     this.agent()?.newChat();
     this.h.post({ type: 'chat_reset' });
+  }
+
+  // ── getting started and the machine card (E105) ─────────────────
+
+  private globalMemo(): PanelHost['memo'] {
+    return this.h.globalMemo || this.h.memo;
+  }
+
+  /** "Getting started" back on screen: the command, the menu item, the card's button. */
+  showStart(): void {
+    this.globalMemo().set(START_DISMISSED_KEY, false);
+    this.h.post({ type: 'start_show' });
+  }
+
+  /** The machine card: open or close it, and ask for fresh data. */
+  toggleMachine(): void {
+    this.h.post({ type: 'machine_toggle' });
+    this.requestMachine();
+  }
+
+  /**
+   * Asks the agent to describe its machine. The first request after a start
+   * waits MACHINE_TIMEOUT_MS: an older agent that stays silent is then
+   * taken for one that does not know the command.
+   */
+  requestMachine(): void {
+    const agent = this.agent();
+    if (!agent?.alive || this.machineKnown === false) return;
+    agent.sendCommand('machine_state');
+    if (this.machineKnown === true || this.machineTimer) return;
+    this.machineTimer = setTimeout(() => {
+      this.machineTimer = null;
+      if (this.machineKnown === null) this.machineRefused();
+    }, MACHINE_TIMEOUT_MS);
+    // Nothing to keep a process alive for (the extension host, the tests).
+    (this.machineTimer as unknown as { unref?: () => void }).unref?.();
+  }
+
+  /** The agent process is gone or replaced: what it said about the machine is void. */
+  clearMachine(): void {
+    const had = this.machine !== null || this.machineKnown !== null;
+    this.resetMachine();
+    if (had) this.h.post({ type: 'machine_clear' });
+  }
+
+  private resetMachine(): void {
+    if (this.machineTimer) clearTimeout(this.machineTimer);
+    this.machineTimer = null;
+    this.machine = null;
+    this.machineKnown = null;
+  }
+
+  private machineRefused(): void {
+    if (this.machineTimer) clearTimeout(this.machineTimer);
+    this.machineTimer = null;
+    this.machineKnown = false;
+    if (!this.machine) this.h.post({ type: 'machine_state', unsupported: true });
+  }
+
+  private setMachine(ms: MachineState): void {
+    if (this.machineTimer) clearTimeout(this.machineTimer);
+    this.machineTimer = null;
+    this.machineKnown = true;
+    this.machine = ms;
+    // The code is drawn here, not in the panel: the encoder is bundled with
+    // the extension, and the page gets one SVG path.
+    if (this.qrCache.url !== ms.phone_url) {
+      this.qrCache = { url: ms.phone_url, pic: ms.phone_url ? qrPicture(ms.phone_url) : null };
+    }
+    this.h.post({ type: 'machine_state', ...ms, phone_qr: this.qrCache.pic });
   }
 
   // ── dialogs ─────────────────────────────────────────────────────

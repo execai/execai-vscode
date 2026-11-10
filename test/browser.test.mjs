@@ -69,6 +69,7 @@ for (const bundle of BUNDLES) {
     assert.deepEqual(p.ins(), [
       { type: 'command', name: 'state' },
       { type: 'command', name: 'resume_last' },
+      { type: 'command', name: 'machine_state' },
       { type: 'command', name: 'list_chats' },
     ]);
   });

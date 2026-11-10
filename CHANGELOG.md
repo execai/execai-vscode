@@ -3,6 +3,28 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.39 — 2026-11-10
+
+### Added
+
+- **Getting started.** An empty chat opens with five steps and their ticks:
+  sign in, connect models (your own provider keys or an ExecAI plan, with
+  which source answered), turn on sync (what goes to your account and what
+  stays on the machine; the sync password cannot be recovered), bind the
+  folder to a project, call the agent from your phone. Each step has the
+  button that does it. Closed once, it stays closed in every project;
+  **ExecAI: Getting started** or the panel menu brings it back.
+- **My machine.** A compact card from the panel title bar or the panel menu:
+  the machine and the agent version, the account and its plan, which model
+  sources answered and when, what sync carries, whether the web chat and the
+  phone can reach this machine — and a QR code for the phone, drawn right in
+  the panel.
+
+### Changed
+
+- **The panel updates the agent to 7.9**, which describes its machine; with
+  an older agent both cards stay hidden and the machine card asks to update it.
+
 ## 0.2.38 — 2026-11-04
 
 ### Changed

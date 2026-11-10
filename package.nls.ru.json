@@ -13,5 +13,7 @@
   "cfg.maxIterations": "Предел итераций инструментов на один ход (0 — из конфига execai).",
   "cfg.attachContext": "Прикладывать активный файл и выделение к сообщению.",
   "cfg.autoInstall": "Предлагать скачать агента execai, если он не найден или устарел.",
-  "cmd.checkUpdates": "ExecAI Studio: Проверить обновления…"
+  "cmd.checkUpdates": "ExecAI Studio: Проверить обновления…",
+  "cmd.machine": "ExecAI: Моя машина",
+  "cmd.start": "ExecAI: Начало"
 }

@@ -17,7 +17,7 @@
 
 import * as vscode from 'vscode';
 import { renderMarkdown } from './markdown';
-import { inboxMenuEntries, fleetView } from './panelLogic';
+import { inboxMenuEntries, fleetView, showStart, startSteps, machineRows } from './panelLogic';
 import { PAYMENT_URL } from './protocol';
 
 export type ChatLang = 'en' | 'ru';
@@ -129,6 +129,78 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     agentReadOnly: 'Read-only: what the subagent has done so far.',
     agentBack: 'Back to the chat',
     askFromAgent: 'Subagent: ',
+    // Getting started and the machine card (E105).
+    mStart: 'Getting started',
+    mMachine: 'My machine',
+    startTitle: 'Getting started',
+    startLead: 'Five steps, and the agent is with you everywhere: in the editor, in the web chat and on your phone.',
+    startClose: 'Close — it comes back from the menu: Getting started',
+    stDone: 'done',
+    stTodo: 'not yet',
+    stLogin: 'Sign in to ExecAI',
+    stLoginWhy: 'The account ties together your machines, the web chat and the phone.',
+    stLoginBtn: 'Sign in',
+    stModels: 'Connect models',
+    stModelsWhy: 'Your own provider keys or an ExecAI plan — the agent works the same with either.',
+    stModelsBtn: 'Connect a source',
+    stSync: 'Turn on sync',
+    stSyncWhy: 'The same keys, settings and memory on every machine of your account.',
+    stSyncBtn: 'Turn on in a terminal',
+    stSyncBtnCopy: 'Copy the command',
+    stSyncCmd: 'In a terminal: ',
+    syncGoes: 'Goes to your account: settings and provider keys (encrypted with your sync password), personal memory, projects.',
+    syncStays: 'Stays on this machine: the server address.',
+    syncPassword: 'The sync password cannot be recovered — write it down.',
+    stProject: 'Bind this folder to a project',
+    stProjectWhy: 'The folder becomes a project in the web chat with the same memory; tasks from the web and the phone run here.',
+    stProjectBtn: 'Bind…',
+    stProjectBound: 'Bound to: ',
+    stProjectNone: 'Not bound yet.',
+    stPhone: 'Call the agent from your phone',
+    stPhoneWhy: 'Point the camera at the code: the web chat opens with this machine selected, whatever models it runs.',
+    stPhoneBtn: 'Show the QR code',
+    stPhoneHide: 'Hide the code',
+    stPhoneNoLink: 'The agent has not sent the link yet.',
+    qrOpen: 'open',
+    srcAlive: 'answered',
+    srcDead: 'no answer',
+    srcNone: 'Nothing connected yet.',
+    agoNow: 'just now',
+    agoMin: 'min ago',
+    agoHour: 'h ago',
+    agoDay: 'd ago',
+    machineTitle: 'My machine',
+    machineLoading: 'Asking the agent…',
+    machineOld: 'This agent does not describe its machine yet — update the agent.',
+    machineUpdate: 'Update the agent',
+    machineRefresh: 'Refresh',
+    machineClose: 'Close',
+    machineQr: 'QR for the phone',
+    rowMachine: 'Machine',
+    rowAgent: 'Agent',
+    rowAccount: 'Account',
+    rowModels: 'Models',
+    rowSync: 'Sync',
+    rowReach: 'Reach',
+    accNone: 'not signed in',
+    planLabel: 'plan ',
+    planNone: 'no plan',
+    planStart: 'Start',
+    planWork: 'Work',
+    planMax: 'Max',
+    syncOn: 'on',
+    syncOff: 'off',
+    syncLast: 'last sent',
+    syncHasConfig: 'settings and provider keys, encrypted',
+    syncMemory: 'personal memory, files',
+    syncProjects: 'projects',
+    modeAll: 'syncs all projects',
+    modeSelected: 'syncs the selected projects',
+    modeNone: 'syncs no projects — settings and personal memory only',
+    reachListening: 'accepts tasks from the web',
+    reachNoListener: 'nobody accepts tasks from the web on this machine',
+    reachWeb: 'can be called from the web chat and the phone',
+    reachNoWeb: 'not reachable from the web chat yet',
   },
   ru: {
     empty: 'Опиши задачу — агент работает прямо в папке проекта.\nАктивный файл и выделение прикладываются автоматически (настройка execai.attachContext).\nФайлы: перетаскивай сюда с зажатым Shift, вставляй Ctrl+V или кнопкой +.',
@@ -235,6 +307,78 @@ export const STRINGS: Record<ChatLang, Record<string, string>> = {
     agentReadOnly: 'Только чтение: что субагент успел сделать.',
     agentBack: 'Вернуться в чат',
     askFromAgent: 'Субагент: ',
+    // Начало и карточка машины (E105).
+    mStart: 'Начало',
+    mMachine: 'Моя машина',
+    startTitle: 'Начало',
+    startLead: 'Пять шагов — и агент с тобой везде: в редакторе, в веб-чате и на телефоне.',
+    startClose: 'Закрыть — вернуть можно в меню: «Начало»',
+    stDone: 'сделано',
+    stTodo: 'ещё нет',
+    stLogin: 'Войти в ExecAI',
+    stLoginWhy: 'Аккаунт связывает твои машины, веб-чат и телефон.',
+    stLoginBtn: 'Войти',
+    stModels: 'Подключить модели',
+    stModelsWhy: 'Свои ключи провайдеров или подписка ExecAI — агент работает одинаково с любыми.',
+    stModelsBtn: 'Подключить источник',
+    stSync: 'Включить синк',
+    stSyncWhy: 'Одни и те же ключи, настройки и память на всех машинах аккаунта.',
+    stSyncBtn: 'Включить в терминале',
+    stSyncBtnCopy: 'Скопировать команду',
+    stSyncCmd: 'В терминале: ',
+    syncGoes: 'Уедет в аккаунт: настройки и ключи провайдеров (зашифрованы паролем синка), личная память, проекты.',
+    syncStays: 'Останется на машине: адрес сервера.',
+    syncPassword: 'Пароль синка не восстанавливается — запиши его.',
+    stProject: 'Привязать папку к проекту',
+    stProjectWhy: 'Папка станет проектом в веб-чате с той же памятью; задачи с сайта и с телефона выполнятся здесь.',
+    stProjectBtn: 'Привязать…',
+    stProjectBound: 'Привязана к: ',
+    stProjectNone: 'Пока не привязана.',
+    stPhone: 'Звать агента с телефона',
+    stPhoneWhy: 'Наведи камеру на код — откроется веб-чат с этой машиной, на любых её моделях.',
+    stPhoneBtn: 'Показать QR-код',
+    stPhoneHide: 'Скрыть код',
+    stPhoneNoLink: 'Агент ещё не прислал ссылку.',
+    qrOpen: 'открыть',
+    srcAlive: 'ответил',
+    srcDead: 'не ответил',
+    srcNone: 'Пока ничего не подключено.',
+    agoNow: 'только что',
+    agoMin: 'мин назад',
+    agoHour: 'ч назад',
+    agoDay: 'дн. назад',
+    machineTitle: 'Моя машина',
+    machineLoading: 'Спрашиваю агента…',
+    machineOld: 'Этот агент ещё не умеет описывать машину — обнови агента.',
+    machineUpdate: 'Обновить агента',
+    machineRefresh: 'Обновить',
+    machineClose: 'Закрыть',
+    machineQr: 'QR для телефона',
+    rowMachine: 'Машина',
+    rowAgent: 'Агент',
+    rowAccount: 'Аккаунт',
+    rowModels: 'Модели',
+    rowSync: 'Синк',
+    rowReach: 'Доступ',
+    accNone: 'вход не выполнен',
+    planLabel: 'тариф ',
+    planNone: 'без подписки',
+    planStart: '«Старт»',
+    planWork: '«Работа»',
+    planMax: '«Макс»',
+    syncOn: 'включён',
+    syncOff: 'выключен',
+    syncLast: 'отправлено',
+    syncHasConfig: 'настройки и ключи провайдеров, зашифрованы',
+    syncMemory: 'личная память, файлов',
+    syncProjects: 'проектов',
+    modeAll: 'синкает все проекты',
+    modeSelected: 'синкает выбранные проекты',
+    modeNone: 'проекты не синкает — только настройки и личную память',
+    reachListening: 'принимает задачи с сайта',
+    reachNoListener: 'задачи с сайта на этой машине никто не принимает',
+    reachWeb: 'можно звать из веб-чата и с телефона',
+    reachNoWeb: 'из веб-чата пока недоступна',
   },
 };
 
@@ -403,6 +547,9 @@ function panelPage(code: ChatLang, o: { nonce: string; browser?: { hostJs: strin
   const mdSource = renderMarkdown.toString();
   const inboxSource = inboxMenuEntries.toString();
   const fleetSource = fleetView.toString();
+  const showStartSource = showStart.toString();
+  const startStepsSource = startSteps.toString();
+  const machineRowsSource = machineRows.toString();
   const T = STRINGS[code];
   const csp = browser
     ? `default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; form-action 'none';`
@@ -810,12 +957,59 @@ function panelPage(code: ChatLang, o: { nonce: string; browser?: { hostJs: strin
   @media (prefers-reduced-motion: reduce) {
     #agents .ag-row[data-state="running"] .ag-st { animation: none; }
   }
+
+  /* ── getting started and the machine card (E105): cards over the log ── */
+  #start, #machine { display: none; flex: 0 1 auto; overflow-y: auto; margin: 8px 8px 0; padding: 7px 10px;
+    font-size: 12px; border: 1px solid var(--vscode-panel-border); border-radius: 8px;
+    background: var(--vscode-editor-background); animation: exIn 160ms ease-out; }
+  #start { max-height: 72%; }
+  #machine { max-height: 60%; }
+  #start.on, #machine.on { display: block; }
+  .st-head, .mc-head { display: flex; gap: 6px; align-items: center; }
+  .st-title, .mc-title { flex: 1; font-weight: 600; }
+  .st-count { font-size: 11px; color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; }
+  .st-close, .mc-close, .mc-refresh { font: inherit; font-size: 13px; line-height: 1; padding: 1px 5px; cursor: pointer;
+    border: none; border-radius: 4px; background: none; color: var(--vscode-descriptionForeground); }
+  .st-close:hover, .mc-close:hover, .mc-refresh:hover { color: var(--vscode-foreground);
+    background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); }
+  .st-lead { margin: 2px 0 4px; color: var(--vscode-descriptionForeground); }
+  .st-step { display: flex; gap: 8px; padding: 6px 0 5px; border-top: 1px solid var(--vscode-panel-border); }
+  .st-mark { flex: 0 0 auto; width: 15px; text-align: center; color: var(--vscode-descriptionForeground); }
+  .st-step.done .st-mark { color: var(--vscode-charts-green, #3fb950); font-weight: bold; }
+  .st-step.done .st-name { opacity: .75; }
+  .st-body, .mc-val { flex: 1; min-width: 0; word-break: break-word; }
+  .st-name { font-weight: 600; }
+  .st-why { margin: 1px 0 2px; color: var(--vscode-descriptionForeground); }
+  .st-line, .mc-line { font-size: 11.5px; }
+  .mc-line { color: var(--vscode-descriptionForeground); }
+  .st-act, .mc-btns button, .qr-link button { font: inherit; font-size: 11.5px; margin-top: 5px; padding: 2px 10px;
+    border-radius: 4px; cursor: pointer; border: 1px solid var(--vscode-button-border, transparent);
+    background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+  .st-act:hover { background: var(--vscode-button-hoverBackground); }
+  .mc-btns button, .qr-link button { background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground); }
+  .mc-row { display: flex; gap: 8px; padding: 4px 0; border-top: 1px solid var(--vscode-panel-border); }
+  .mc-head { padding-bottom: 4px; }
+  .mc-label { flex: 0 0 auto; width: 66px; color: var(--vscode-descriptionForeground); }
+  .mc-row.ok .mc-label::before { content: '\u25cf '; color: var(--vscode-charts-green, #3fb950); }
+  .mc-row.warn .mc-label::before { content: '\u25cf '; color: var(--vscode-editorWarning-foreground, #b89500); }
+  .mc-note { margin: 4px 0; color: var(--vscode-descriptionForeground); }
+  .mc-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .qr-wrap { margin-top: 6px; }
+  /* A QR code is dark on light whatever the theme: phone cameras expect it. */
+  .qr { width: 172px; max-width: 100%; padding: 6px; border-radius: 6px; background: #fff; }
+  .qr svg { display: block; width: 100%; height: auto; }
+  .qr-link { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 11px;
+    color: var(--vscode-descriptionForeground); word-break: break-all; }
+  .qr-link button { margin-top: 0; padding: 1px 8px; }
 ${browser ? browserCss() : ''}</style>
 </head>
 <body${browser ? ' class="browser"' : ''}>${browser ? `
   <div id="hdr"></div>
   <div id="toasts"></div>` : ''}
   <div id="tabs"></div>
+  <div id="machine"></div>
+  <div id="start"></div>
   <div id="log">
     <div id="empty">${T.empty}</div>
   </div>
@@ -860,6 +1054,10 @@ const renderMarkdown = ${mdSource};
 const inboxMenuEntries = ${inboxSource};
 // The subagents block (src/panelLogic.ts), bound to a name the same way.
 const fleetView = ${fleetSource};
+// Getting started and the machine card (src/panelLogic.ts), bound the same way.
+const showStart = ${showStartSource};
+const startSteps = ${startStepsSource};
+const machineRows = ${machineRowsSource};
 const PAYMENT_URL = ${JSON.stringify(PAYMENT_URL)};
 // In a browser (execai ui) the page talks to window.execaiHost, which plays
 // the extension's part (browserHost.ts); what needs an editor is hidden.
@@ -1360,6 +1558,9 @@ function send() {
   curAssistant = null; curThinking = null;
   vscode.postMessage({ type: 'send', text, files: attached.map(a => a.path) });
   attached = []; renderChips();
+  // The chat has begun: "Getting started" steps aside, even when asked for.
+  startForced = false;
+  renderStart();
   scroll();
 }
 sendBtn.onclick = send;
@@ -1450,6 +1651,9 @@ function menuRoot() {
     }, false, 'login'));
   }
   menuInbox();
+  menu.appendChild(el('div', 'sep'));
+  menu.appendChild(mi(T.mMachine, '', () => { closeMenu(); openMachine(); }, false, 'machine'));
+  menu.appendChild(mi(T.mStart, '', () => { closeMenu(); vscode.postMessage({ type: 'start_reopen' }); }, false, 'start'));
   menu.appendChild(el('div', 'sep'));
   menu.appendChild(mi(T.mResume, '', () => {
     closeMenu();
@@ -1547,6 +1751,8 @@ document.addEventListener('click', (e) => {
   const path = e.composedPath();
   if (path.includes(menu) || path.includes(statusEl)) return;
   if (path.some((n) => n && (n.id === 'cmdBtn' || n.id === 'histBtn'))) return;
+  // A button that opens the menu itself (the "Connect a source" step).
+  if (path.some((n) => n && n.classList && n.classList.contains && n.classList.contains('keep-menu'))) return;
   closeMenu();
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
@@ -1677,6 +1883,194 @@ document.addEventListener('paste', (e) => {
     r.readAsDataURL(f);
   }
 });
+
+// ── getting started and the machine card (E105) ──
+// The agent describes this machine in machine_state: the account, which
+// model sources answered, what sync carries, whether the web and the phone
+// can reach it, and the getting-started steps with their ticks. An older
+// agent never does: then neither card is drawn (the machine card, opened by
+// hand, says to update the agent).
+const startBox = document.getElementById('start');
+const machineBox = document.getElementById('machine');
+let machineData = null;     // machine_state as the extension forwards it (phone_qr included)
+let machineOld = false;     // the agent does not know machine_state
+let startDismissed = true;  // until start_prefs says otherwise: no flash of a closed screen
+let startForced = false;    // asked for: the menu item or the command
+let startQr = false;        // the phone step shows its code
+let machineOpen = false;
+let machineQr = false;
+function chatIsEmpty() { return !log.querySelector('.msg'); }
+// The QR code of the phone link: an SVG path the extension made (src/qr.ts),
+// dark on white whatever the theme. Nothing is fetched.
+function qrBlock() {
+  const w = el('div', 'qr-wrap');
+  const q = machineData && machineData.phone_qr;
+  const url = (machineData && machineData.phone_url) || '';
+  if (q && Number.isInteger(q.size) && q.size > 0 && /^[Mhvz0-9 -]*$/.test(q.path || '')) {
+    const box = el('div', 'qr');
+    box.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + q.size + ' ' + q.size +
+      '" shape-rendering="crispEdges"><rect width="' + q.size + '" height="' + q.size +
+      '" fill="#fff"/><path d="' + q.path + '" fill="#000"/></svg>';
+    w.appendChild(box);
+  }
+  if (url) {
+    const line = el('div', 'qr-link');
+    line.appendChild(el('span', '', url.replace('https://', '').replace('http://', '')));
+    const copy = el('button', 'qr-copy', T.copy);
+    copy.onclick = () => {
+      vscode.postMessage({ type: 'copy_text', text: url });
+      copy.textContent = T.copied;
+      setTimeout(() => { copy.textContent = T.copy; }, 1500);
+    };
+    const open = el('button', 'qr-open', T.qrOpen);
+    open.onclick = () => vscode.postMessage({ type: 'open_external', text: url });
+    line.appendChild(copy);
+    line.appendChild(open);
+    w.appendChild(line);
+  }
+  return w;
+}
+// Each step's button does the job with what the panel already has: the
+// sign-in, the "Connect a source" list, the project picker. Sync asks for a
+// password, so it runs as execai sync on in a terminal — or, in a browser
+// with no terminal, the command is copied.
+function startAction(a, btn) {
+  switch (a) {
+    case 'login':
+      vscode.postMessage({ type: 'agent_command', name: 'login' });
+      break;
+    case 'connect':
+      vscode.postMessage({ type: 'agent_command', name: 'state' }); // fresh lists
+      menuList('connectable');
+      menu.classList.add('open');
+      break;
+    case 'sync_on':
+      if (BROWSER) {
+        vscode.postMessage({ type: 'copy_text', text: 'execai sync on' });
+        btn.textContent = T.copied;
+        setTimeout(() => { btn.textContent = T.stSyncBtnCopy; }, 1500);
+      } else {
+        vscode.postMessage({ type: 'open_terminal', text: 'sync on' });
+      }
+      break;
+    case 'bind':
+      vscode.postMessage({ type: 'pick_workspace' });
+      break;
+    case 'qr': {
+      startQr = !startQr;
+      renderStart();
+      const q = startQr && startBox.querySelector('.qr-wrap');
+      if (q && q.scrollIntoView) q.scrollIntoView({ block: 'nearest' });
+      break;
+    }
+  }
+}
+function renderStart() {
+  const bound = inboxData && inboxData.bound_workspace;
+  const steps = machineData ? startSteps(machineData, bound, T, Date.now()) : [];
+  // One card at a time: the machine card, opened by hand, wins.
+  const on = !viewAgent && !machineOpen &&
+    showStart({ steps, dismissed: startDismissed, chatEmpty: chatIsEmpty(), forced: startForced });
+  startBox.innerHTML = '';
+  startBox.classList.toggle('on', on);
+  if (!on) return;
+  const head = el('div', 'st-head');
+  head.appendChild(el('span', 'st-title', T.startTitle));
+  head.appendChild(el('span', 'st-count', steps.filter(s => s.done).length + '/' + steps.length));
+  const x = el('button', 'st-close', '×');
+  x.title = T.startClose;
+  x.onclick = () => {
+    startForced = false;
+    startDismissed = true;
+    startQr = false;
+    vscode.postMessage({ type: 'start_dismiss' });
+    renderStart();
+  };
+  head.appendChild(x);
+  startBox.appendChild(head);
+  startBox.appendChild(el('div', 'st-lead', T.startLead));
+  for (const s of steps) {
+    const row = el('div', 'st-step' + (s.done ? ' done' : ''));
+    row.setAttribute('data-step', s.id);
+    const mark = el('span', 'st-mark', s.done ? '✓' : '○');
+    mark.title = s.done ? T.stDone : T.stTodo;
+    row.appendChild(mark);
+    const body = el('div', 'st-body');
+    body.appendChild(el('div', 'st-name', s.title));
+    body.appendChild(el('div', 'st-why', s.why));
+    for (const line of s.lines) body.appendChild(el('div', 'st-line', line));
+    if (s.action) {
+      let label = s.actionLabel;
+      if (s.action === 'qr' && startQr) label = T.stPhoneHide;
+      if (s.action === 'sync_on' && BROWSER) label = T.stSyncBtnCopy;
+      const b = el('button', 'st-act' + (s.action === 'connect' ? ' keep-menu' : ''), label);
+      b.onclick = () => startAction(s.action, b);
+      body.appendChild(b);
+    }
+    if (s.id === 'phone' && startQr) body.appendChild(qrBlock());
+    row.appendChild(body);
+    startBox.appendChild(row);
+  }
+}
+function openMachine() {
+  machineOpen = true;
+  machineQr = false;
+  renderMachine();
+  renderStart();
+  vscode.postMessage({ type: 'machine_refresh' });
+}
+function renderMachine() {
+  machineBox.innerHTML = '';
+  machineBox.classList.toggle('on', machineOpen);
+  if (!machineOpen) return;
+  const head = el('div', 'mc-head');
+  head.appendChild(el('span', 'mc-title', T.machineTitle));
+  const r = el('button', 'mc-refresh', '↻');
+  r.title = T.machineRefresh;
+  r.onclick = () => vscode.postMessage({ type: 'machine_refresh' });
+  head.appendChild(r);
+  const x = el('button', 'mc-close', '×');
+  x.title = T.machineClose;
+  x.onclick = () => { machineOpen = false; machineQr = false; renderMachine(); renderStart(); };
+  head.appendChild(x);
+  machineBox.appendChild(head);
+  if (!machineData) {
+    machineBox.appendChild(el('div', 'mc-note', machineOld ? T.machineOld : T.machineLoading));
+    // The editor can fetch a newer agent; execai ui is the agent itself.
+    if (machineOld && !BROWSER) {
+      const u = el('button', 'mc-update', T.machineUpdate);
+      u.onclick = () => vscode.postMessage({ type: 'update_agent' });
+      const btns = el('div', 'mc-btns');
+      btns.appendChild(u);
+      machineBox.appendChild(btns);
+    }
+    return;
+  }
+  for (const row of machineRows(machineData, T, Date.now())) {
+    const d = el('div', 'mc-row' + (row.tone ? ' ' + row.tone : ''));
+    d.setAttribute('data-row', row.key);
+    d.appendChild(el('span', 'mc-label', row.label));
+    const v = el('div', 'mc-val');
+    if (row.value) v.appendChild(el('div', '', row.value));
+    for (const line of row.lines) v.appendChild(el('div', 'mc-line', line));
+    d.appendChild(v);
+    machineBox.appendChild(d);
+  }
+  const btns = el('div', 'mc-btns');
+  if (machineData.phone_url) {
+    const q = el('button', 'mc-qr', machineQr ? T.stPhoneHide : T.machineQr);
+    q.onclick = () => { machineQr = !machineQr; renderMachine(); };
+    btns.appendChild(q);
+  }
+  const st = el('button', 'mc-start', T.mStart);
+  st.onclick = () => vscode.postMessage({ type: 'start_reopen' });
+  btns.appendChild(st);
+  machineBox.appendChild(btns);
+  if (machineQr) machineBox.appendChild(qrBlock());
+}
+// Events after which the chat may have become empty or not.
+const START_EVENTS = { ready: 1, chat_reset: 1, chat_loaded: 1, auto_user: 1, turn_start: 1,
+  inbox: 1, agent_loaded: 1, done: 1 };
 
 // the listener is attached — the buffered events can be replayed now
 vscode.postMessage({ type: 'ui_ready' });
@@ -2012,11 +2406,43 @@ window.addEventListener('message', (ev) => {
       scroll();
       break;
     }
+    case 'machine_state':
+      // A late answer still wins over "update the agent".
+      if (e.unsupported) { if (!machineData) machineOld = true; }
+      else { machineOld = false; machineData = e; }
+      renderStart();
+      renderMachine();
+      break;
+    case 'machine_clear':
+      // The agent is gone: what it said about the machine is no longer news.
+      machineData = null; machineOld = false; startQr = false; machineQr = false;
+      renderStart();
+      renderMachine();
+      break;
+    case 'machine_toggle':
+      machineOpen = !machineOpen;
+      machineQr = false;
+      renderMachine();
+      renderStart();
+      break;
+    case 'start_prefs':
+      startDismissed = !!e.dismissed;
+      if (startDismissed) startForced = false;
+      renderStart();
+      break;
+    case 'start_show':
+      startDismissed = false;
+      startForced = true;
+      machineOpen = false; // one card at a time
+      renderMachine();
+      renderStart();
+      break;
     case 'prefill':
       inp.value = (e.text || '') + inp.value;
       inp.focus();
       break;
   }
+  if (START_EVENTS[e.type]) renderStart();
 });
 </script>
 </body>

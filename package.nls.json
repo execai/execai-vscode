@@ -13,5 +13,7 @@
   "cfg.maxIterations": "Tool iteration limit per turn (0 — take it from the execai config).",
   "cfg.attachContext": "Attach the active file and selection to the message.",
   "cfg.autoInstall": "Offer to download the execai agent when it is missing or outdated.",
-  "cmd.checkUpdates": "ExecAI Studio: Check for Updates…"
+  "cmd.checkUpdates": "ExecAI Studio: Check for Updates…",
+  "cmd.machine": "ExecAI: My machine",
+  "cmd.start": "ExecAI: Getting started"
 }

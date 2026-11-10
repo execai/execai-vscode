@@ -20,6 +20,8 @@ export function activate(ctx: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('execai.sendSelection', () => chat.sendSelection()),
     vscode.commands.registerCommand('execai.installAgent', () => chat.installAgent()),
     vscode.commands.registerCommand('execai.checkUpdates', () => checkStudioUpdatesNow(ctx)),
+    vscode.commands.registerCommand('execai.start', () => chat.showStart()),
+    vscode.commands.registerCommand('execai.machine', () => chat.toggleMachine()),
     // Inside Studio the native Help → «Download Update» opens product.json's
     // downloadUrl, which the build points at execai-studio://update — the
     // editor hands that URI back here, and the extension installs the update
@@ -33,14 +35,19 @@ export function activate(ctx: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('execai.attachFile',
       (uri?: vscode.Uri, uris?: vscode.Uri[]) => chat.attachFromCommand(uri, uris)),
-    vscode.commands.registerCommand('execai.openTerminal', async () => {
+    vscode.commands.registerCommand('execai.openTerminal', async (args?: unknown) => {
       // Escape hatch: the full TUI in a terminal, for people who outgrow the
       // panel. The binary is resolved the same way the panel resolves it —
       // in Studio that is the bundled agent, which is not on PATH.
+      // args: a subcommand the panel needs a terminal for (`sync on` asks for
+      // a password) — plain lowercase words only, the line goes into a shell.
+      // One bad word voids them all: dropping words could change the meaning.
+      const extra: string[] = Array.isArray(args) &&
+        args.every((a) => typeof a === 'string' && /^[a-z][a-z-]*$/.test(a)) ? args as string[] : [];
       const term = vscode.window.createTerminal({ name: 'execai' });
       const bin = (await resolveBinary(ctx)) || 'execai';
       term.show();
-      term.sendText(bin.includes(' ') ? `"${bin}"` : bin);
+      term.sendText([bin.includes(' ') ? `"${bin}"` : bin, ...extra].join(' '));
     }),
     { dispose: () => chat.dispose() },
   );

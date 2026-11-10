@@ -86,6 +86,11 @@ function boot(): void {
   hdr.appendChild(statusEl);
   hdr.appendChild(connEl);
   hdr.appendChild(whereEl);
+  // The machine card, as the editor opens it from the panel title bar.
+  const machineBtn = el('button', 'hdr-machine', '\u{1F5A5}');
+  machineBtn.title = l10n.t('My machine');
+  machineBtn.onclick = () => core.toggleMachine();
+  hdr.appendChild(machineBtn);
   document.title = cfg.cwd ? basename(cfg.cwd) + ' — ExecAI' : 'ExecAI';
 
   const canNotify = () => typeof Notification !== 'undefined';
@@ -363,6 +368,20 @@ function boot(): void {
       },
       set: (key, value) => {
         try { localStorage.setItem(memoKey(key), JSON.stringify(value)); } catch { /* private mode */ }
+      },
+    },
+    // For every project served from this browser: "Getting started" closed once.
+    globalMemo: {
+      get: <T>(key: string, def: T): T => {
+        try {
+          const v = localStorage.getItem('execai:global:' + key);
+          return v === null ? def : JSON.parse(v);
+        } catch {
+          return def;
+        }
+      },
+      set: (key, value) => {
+        try { localStorage.setItem('execai:global:' + key, JSON.stringify(value)); } catch { /* private mode */ }
       },
     },
     pick,

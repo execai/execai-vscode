@@ -5,3 +5,4 @@
 .panelLogic.cjs
 .chatView.cjs
 .browserHost.js
+.qr.cjs

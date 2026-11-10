@@ -75,6 +75,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         get: <T>(key: string, def: T) => this.ctx.workspaceState.get<T>(key, def),
         set: (key, value) => { void this.ctx.workspaceState.update(key, value); },
       },
+      // "Getting started" closed once is closed in every project.
+      globalMemo: {
+        get: <T>(key: string, def: T) => this.ctx.globalState.get<T>(key, def),
+        set: (key, value) => { void this.ctx.globalState.update(key, value); },
+      },
       pick: (items, opts) => vscode.window.showQuickPick(items, opts),
       input: (opts) => vscode.window.showInputBox(opts),
       resumeLastChat: () => vscode.workspace.getConfiguration('execai').get<boolean>('resumeLastChat', true),
@@ -83,8 +88,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       attachPaths: (paths) => { void this.attachPaths(paths); },
       pasteBlob: (name, dataURL) => { void this.saveBlobAndAttach(name, dataURL); },
       openFile: (p, line) => { void this.openFile(p, line); },
-      openTerminal: () => { void vscode.commands.executeCommand('execai.openTerminal'); },
+      openTerminal: (args) => { void vscode.commands.executeCommand('execai.openTerminal', args ?? []); },
       checkUpdates: () => { void vscode.commands.executeCommand('execai.checkUpdates'); },
+      updateAgent: () => { void vscode.commands.executeCommand('execai.installAgent'); },
     };
   }
 
@@ -131,6 +137,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     this.client?.dispose();
     this.clearInbox(); // a new process reports its own inbox, or none at all
+    this.core.clearMachine(); // …and describes its machine anew
     this.client = new AgentClient({
       binary: bin,
       cwd: ws.uri.fsPath,
@@ -138,6 +145,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       onEvent: (e) => this.fromAgent(e),
       onExit: (code, stderrTail) => {
         this.clearInbox(); // nobody listens for this window any more
+        this.core.clearMachine();
         this.status.text = vscode.l10n.t('ExecAI: agent stopped');
         this.toWebview({
           type: 'agent_exit',
@@ -368,6 +376,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   newChat(): void {
     this.core.newChat();
+  }
+  /** "ExecAI: Getting started": the steps back on screen, whatever was closed. */
+  showStart(): void {
+    this.core.showStart();
+    this.reveal();
+  }
+  /** "ExecAI: My machine": the machine card, opened or closed. */
+  toggleMachine(): void {
+    this.core.toggleMachine();
+    this.reveal();
+  }
+  /** Brings the panel forward — opening it first when it has never been shown. */
+  private reveal(): void {
+    if (this.view) this.view.show?.(true);
+    else void vscode.commands.executeCommand('execai.chat.focus');
   }
   stopTurn(): void {
     this.client?.stop();
