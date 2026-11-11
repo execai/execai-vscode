@@ -16,13 +16,19 @@
 - **编辑器上下文** —— 当前文件与选中内容会附加到消息中（`execai.attachContext`）
 - **变更文件** —— 在该轮下方以标签展示，点击即可打开
 - **聊天标签页**位于面板顶部，就像编辑器的文件标签：本项目的所有聊天，点击切换，「×」关闭（聊天仍在历史中，进行中的回合继续运行），拖动可调整顺序
-- **聊天并行运行**（agent R6.74+）：在某个聊天回答时切换标签——本轮继续进行，回来时从头重放。标签徽标：闪烁的点——工作中，绿点——已完成但未读，«?»——等待你的回答，⏰——已安排唤醒；当你在别处时完成或提问的聊天会弹出带 **打开** 的提示。唤醒（`schedule_wakeup`）显示为带 **立即** / **取消** 的一行，并在编辑器重启后保留
+- **聊天并行运行**（agent R6.74+）：在某个聊天回答时切换标签——本轮继续进行，回来时从头重放。标签徽标：闪烁的点——工作中，绿点——已完成但未读，«?»——等待你的回答，⏰——已安排唤醒；当你在别处时完成或提问的聊天会弹出带 **Open** 的提示。唤醒（`schedule_wakeup`）显示为带 **Now** / **Cancel** 的一行，并在编辑器重启后保留
 - **可点击链接** — URL 在浏览器中打开；项目内路径（`internal/agent/memory.go:42`）会在编辑器中定位到该行
 - **复制按钮** — 每个代码块一个，整条回答也有一个（复制原始 markdown）
-- **停止** 中断当前回合；**新对话** 重置历史与会话级权限
-- **终端后路** —— 「ExecAI: 在终端中打开」命令可获得完整 TUI
+- **Stop** 中断当前回合；**New chat** 重置历史与会话级权限
+- **终端后路** —— 「ExecAI: Open in a terminal」命令可获得完整 TUI
+- **Getting started**（agent R7.10+）—— 空对话会先显示五个带勾选标记的步骤：登录、接入模型、开启同步、把文件夹绑定到项目、用手机呼叫智能体。每一步都有完成它的按钮；关闭一次后在所有项目中都保持关闭，可通过 `>_` 菜单或「ExecAI: Getting started」命令重新打开
+- **My machine** —— 一张紧凑的卡片，可从面板标题栏、`>_` 菜单或「ExecAI: My machine」命令打开：机器与智能体版本、账号及其套餐、哪些模型来源有响应及其时间、同步会带走哪些内容、网页版对话和手机能否访问这台机器
+- **手机二维码** —— 最后一步中的 **Show the QR code** 和卡片上的 **QR for the phone**：用手机摄像头对准它，网页版对话就会打开并选中这台机器。二维码直接在面板中绘制，不从网络获取任何内容
+- **子智能体** —— 当智能体把工作分给子智能体时，输入框上方的 **Agents** 区块会逐个列出：状态、标题、「step 12/50 · 38 left」（剩余 5 步及以下时变黄）、最近使用的工具和运行时长；仍在运行的带 **+25** 和 **Stop**，显示「hit the step limit」的可用 **Continue (+25)** 从中断处继续。点击某一行会在只读标签页中打开它目前的工作；`>_` 菜单中的 **Subagent steps** 设置新子智能体的步数上限（1–100，默认 50）
+- **来自网页和手机的任务** —— 在网页版对话或手机上发起的任务会在这里以新对话打开：标签页带 🌐，第一条消息为「From the web: …」，弹出带 **Open** 的提示「A task came in from the web: …」，整个回合在面板中流式显示；权限请求可以在这里或网站上回答，以先到者为准。需要登录、包含网页任务功能的 ExecAI 套餐（面板会说明是哪种并给出套餐链接），以及把文件夹绑定到项目——`>_` 菜单中的 **Project**。状态栏和菜单会显示这台机器上由谁接收任务；若任务由后台的 `execai serve` 接收，可点 **Accept here** 改由此处接收
+- **浏览器中的同一面板** —— 智能体的 `execai ui` 命令会在 127.0.0.1 的浏览器标签页中打开这一面板，无需编辑器；通过 SSH 时转发端口，并在本地打开打印出的链接。指南：[docs/en/ui.md](https://github.com/execai/execai-agent/blob/main/docs/en/ui.md)
 
-数据源（ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…）、模型、记忆和权限都在 CLI 中配置，扩展直接使用你当前的配置。数据源也可以是 **你自己的端点** —— 任意 OpenAI 或 Anthropic 兼容地址（LM Studio、vLLM、LiteLLM、公司网关）：在 `>_` 菜单中选择 **连接来源 → 自定义提供商**，填写名称、接口类型、地址和密钥。模型列表来自提供商本身。
+数据源（ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…）、模型、记忆和权限都在 CLI 中配置，扩展直接使用你当前的配置。数据源也可以是 **你自己的端点** —— 任意 OpenAI 或 Anthropic 兼容地址（LM Studio、vLLM、LiteLLM、公司网关）：在 `>_` 菜单中选择 **Connect a source → Custom provider**，填写名称、接口类型、地址和密钥。模型列表来自提供商本身。
 
 ## 界面语言
 
@@ -35,10 +41,10 @@
    - **Cursor / VSCodium / Windsurf** —— Open VSX 搜索 `ExecAI`
    - 或手动安装：从 [Releases](https://github.com/execai/execai-vscode/releases) 下载 `.vsix` → `Extensions: Install from VSIX…`
 2. 打开一个项目文件夹，左侧会出现 ExecAI 图标。
-3. 首次启动时，扩展会提示**下载智能体**（约 6 MB），它会放进扩展自己的存储目录，
-   无需 sudo。如果 PATH 中已有足够新的 execai（R6.49+），则直接使用它。
+3. 首次启动时，扩展会提示**下载智能体**（约 7 MB），它会放进扩展自己的存储目录，
+   无需 sudo。如果 PATH 中已有足够新的 execai（R7.10+），则直接使用它。
 
-随后可直接在对话中登录或接入你自己的订阅：`>_` → 「在终端中打开 execai」。
+随后可直接在面板中登录并接入模型：**Getting started** 的每个步骤都有对应按钮，`>_` 菜单里也有同样的入口（「Sign in to ExecAI」「Connect a source」）。
 
 手动安装智能体并非必需，但同样可行：
 
@@ -54,6 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/execai/execai-agent/main/install.sh
 | `execai.maxIterations` | `0` | 每回合的工具迭代上限（0 —— 取自 execai 配置）。 |
 | `execai.attachContext` | `true` | 将当前文件与选中内容附加到消息。 |
 | `execai.autoInstall` | `true` | 当智能体缺失或过旧时提示下载。 |
+| `execai.resumeLastChat` | `true` | 打开面板时继续本项目的上一个对话；关闭则每次从空白开始。 |
 
 ## 工作原理
 

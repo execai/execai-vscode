@@ -16,13 +16,19 @@ Der Agent [execai](https://github.com/execai/execai-agent) in der Seitenleiste d
 - **Editor-Kontext** — die aktive Datei und die Auswahl werden an die Nachricht angehängt (`execai.attachContext`)
 - **Geänderte Dateien** — Chips unter dem Zug, ein Klick öffnet die Datei
 - **Chat-Tabs** oben im Panel, wie Datei-Tabs im Editor: alle Chats des Projekts, ein Klick zum Wechseln, «×» zum Schließen (der Chat bleibt in der Historie, ein laufender Turn läuft weiter), Ziehen zum Umsortieren
-- **Chats laufen parallel** (Agent R6.74+): Tabs wechseln, während ein Chat antwortet — der Zug läuft weiter und wird beim Zurückkommen von Anfang an abgespielt. Badges auf den Tabs: pulsierender Punkt — arbeitet, grüner Punkt — fertig und noch nicht gelesen, «?» — wartet auf deine Antwort, ⏰ — Aufwachen geplant; ein Chat, der fertig wird oder fragt, während du woanders bist, zeigt einen Toast mit **Öffnen**. Aufwachen (`schedule_wakeup`) erscheint als Zeile mit **Jetzt** / **Abbrechen** und überlebt einen Editor-Neustart
+- **Chats laufen parallel** (Agent R6.74+): Tabs wechseln, während ein Chat antwortet — der Zug läuft weiter und wird beim Zurückkommen von Anfang an abgespielt. Badges auf den Tabs: pulsierender Punkt — arbeitet, grüner Punkt — fertig und noch nicht gelesen, «?» — wartet auf deine Antwort, ⏰ — Aufwachen geplant; ein Chat, der fertig wird oder fragt, während du woanders bist, zeigt einen Toast mit **Open**. Aufwachen (`schedule_wakeup`) erscheint als Zeile mit **Now** / **Cancel** und überlebt einen Editor-Neustart
 - **Klickbare Links** — eine URL öffnet im Browser, ein Projektpfad (`internal/agent/memory.go:42`) öffnet die Datei an dieser Zeile
 - **Kopier-Buttons** — an jedem Codeblock und an der ganzen Antwort (kopiert das ursprüngliche Markdown)
-- **Stopp** bricht den laufenden Zug ab; **Neuer Chat** setzt Verlauf und Sitzungsrechte zurück
-- **Notausgang Terminal** — der Befehl „ExecAI: Im Terminal öffnen“ liefert das vollständige TUI
+- **Stop** bricht den laufenden Zug ab; **New chat** setzt Verlauf und Sitzungsrechte zurück
+- **Notausgang Terminal** — der Befehl „ExecAI: Open in a terminal“ liefert das vollständige TUI
+- **Getting started** (Agent R7.10+) — ein leerer Chat beginnt mit fünf Schritten und ihren Häkchen: anmelden, Modelle verbinden, Sync einschalten, den Ordner an ein Projekt binden, den Agenten vom Handy aus rufen. Jeder Schritt hat die Schaltfläche, die ihn erledigt; einmal geschlossen, bleibt der Bildschirm in allen Projekten zu, und das `>_`-Menü oder der Befehl „ExecAI: Getting started“ holt ihn zurück
+- **My machine** — eine kompakte Karte aus der Titelleiste des Panels, dem `>_`-Menü oder dem Befehl „ExecAI: My machine“: Rechner und Agent-Version, Konto und Tarif, welche Modellquellen geantwortet haben und wann, was der Sync überträgt, ob Web-Chat und Handy diesen Rechner erreichen
+- **QR-Code fürs Handy** — **Show the QR code** im letzten Schritt und **QR for the phone** auf der Karte: die Handykamera darauf richten, und der Web-Chat öffnet sich mit diesem Rechner ausgewählt. Der Code wird direkt im Panel gezeichnet, nichts wird geladen
+- **Subagenten** — verteilt der Agent Arbeit an Subagenten, listet ein Block **Agents** über der Eingabe sie auf: Zustand, Titel, „step 12/50 · 38 left“ (gelb ab 5 verbleibenden Schritten), das letzte Werkzeug und die Laufzeit, dazu **+25** und **Stop** bei denen, die noch laufen; einer mit „hit the step limit“ bekommt **Continue (+25)** und macht dort weiter, wo er stehen blieb. Ein Klick auf eine Zeile öffnet seine bisherige Arbeit in einem schreibgeschützten Tab; **Subagent steps** im `>_`-Menü legt die Grenze für neue Subagenten fest (1–100, Standard 50)
+- **Aufgaben aus dem Web und vom Handy** — eine im Web-Chat oder auf dem Handy gestartete Aufgabe öffnet sich hier als neuer Chat: der Tab trägt 🌐, die erste Nachricht lautet „From the web: …“, ein Toast „A task came in from the web: …“ hat **Open**, und der Zug läuft im Panel; eine Berechtigungsfrage lässt sich hier oder auf der Website beantworten, je nachdem, was zuerst kommt. Nötig sind die Anmeldung, ein ExecAI-Tarif mit Aufgaben aus dem Web (das Panel nennt ihn und verlinkt die Tarife) und ein an ein Projekt gebundener Ordner — **Project** im `>_`-Menü. Statusleiste und Menü zeigen, wer auf diesem Rechner Aufgaben annimmt, mit **Accept here**, wenn das im Hintergrund laufende `execai serve` sie hält
+- **Dasselbe Panel im Browser** — der Agent-Befehl `execai ui` öffnet dieses Panel in einem Browser-Tab auf 127.0.0.1, ganz ohne Editor; über SSH den Port weiterleiten und den ausgegebenen Link bei dir öffnen. Anleitung: [docs/en/ui.md](https://github.com/execai/execai-agent/blob/main/docs/en/ui.md)
 
-Quellen (ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…), Modelle, Gedächtnis und Rechte werden in der CLI selbst konfiguriert — die Erweiterung nutzt deine aktuelle Konfiguration. Eine Quelle kann auch **dein eigener Endpoint** sein — jede OpenAI- oder Anthropic-kompatible Adresse (LM Studio, vLLM, LiteLLM, ein Firmen-Gateway): **Quelle verbinden → Eigener Anbieter** im `>_`-Menü fragt nach Name, Schnittstellentyp, Adresse und Key. Die Modelllisten kommen von den Anbietern selbst.
+Quellen (ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…), Modelle, Gedächtnis und Rechte werden in der CLI selbst konfiguriert — die Erweiterung nutzt deine aktuelle Konfiguration. Eine Quelle kann auch **dein eigener Endpoint** sein — jede OpenAI- oder Anthropic-kompatible Adresse (LM Studio, vLLM, LiteLLM, ein Firmen-Gateway): **Connect a source → Custom provider** im `>_`-Menü fragt nach Name, Schnittstellentyp, Adresse und Key. Die Modelllisten kommen von den Anbietern selbst.
 
 ## Oberflächensprachen
 
@@ -35,11 +41,11 @@ Panel und Befehle folgen der Anzeigesprache des Editors: **Englisch** und **Russ
    - **Cursor / VSCodium / Windsurf** — Open VSX: `ExecAI`
    - oder von Hand: `.vsix` aus den [Releases](https://github.com/execai/execai-vscode/releases) laden → `Extensions: Install from VSIX…`
 2. Öffne einen Projektordner — links erscheint das ExecAI-Symbol.
-3. Beim ersten Start bietet die Erweiterung an, **den Agenten herunterzuladen** (~6 MB). Er landet
+3. Beim ersten Start bietet die Erweiterung an, **den Agenten herunterzuladen** (~7 MB). Er landet
    im Speicher der Erweiterung, ohne sudo. Liegt execai bereits im PATH und ist
-   aktuell genug (R6.49+), wird dieser verwendet.
+   aktuell genug (R7.10+), wird dieser verwendet.
 
-Melde dich danach an oder verbinde dein eigenes Abo direkt im Chat: `>_` → „execai im Terminal öffnen“.
+Melde dich danach an und verbinde Modelle direkt im Panel: die Schritte von **Getting started** haben dafür je eine Schaltfläche, das `>_`-Menü hat dasselbe („Sign in to ExecAI“, „Connect a source“).
 
 Den Agenten von Hand zu installieren ist optional, aber möglich:
 
@@ -55,6 +61,7 @@ curl -fsSL https://raw.githubusercontent.com/execai/execai-agent/main/install.sh
 | `execai.maxIterations` | `0` | Grenze der Werkzeug-Iterationen pro Zug (0 — aus der execai-Konfiguration). |
 | `execai.attachContext` | `true` | Aktive Datei und Auswahl an die Nachricht anhängen. |
 | `execai.autoInstall` | `true` | Den Download des Agenten anbieten, wenn er fehlt oder veraltet ist. |
+| `execai.resumeLastChat` | `true` | Beim Öffnen des Panels den letzten Chat des Projekts fortsetzen; aus — jedes Mal bei null anfangen. |
 
 ## Wie es funktioniert
 
