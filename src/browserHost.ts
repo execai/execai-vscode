@@ -2,12 +2,15 @@
 // The browser side of `execai ui`: the chat panel of the extension, served by
 // the agent on 127.0.0.1 and opened in any browser.
 //
-// The page (webviewHtml.ts, browserHtml) is the very one VS Code shows. In VS
-// Code it talks to the extension through acquireVsCodeApi(); here it talks to
-// window.execaiHost, defined below, and this file plays the extension's part:
-// PanelCore — the same class chatView.ts runs — routes the agent's events and
-// turns the panel's messages into ide-protocol input, and the PanelHost made
-// here swaps the editor's QuickPicks, toasts and status bar for HTML.
+// The page (browserPage.ts, browserHtml) runs the very script VS Code shows,
+// inside the window of `execai ui`. In VS Code that script talks to the
+// extension through acquireVsCodeApi(); here it talks to window.execaiHost,
+// defined below, and this file plays the extension's part: PanelCore — the
+// same class chatView.ts runs — routes the agent's events and turns the
+// panel's messages into ide-protocol input, and the PanelHost made here swaps
+// the editor's QuickPicks and toasts for HTML. What the window shows of the
+// state — the model, the machine, the inbox — it draws itself from the same
+// events (window/script.ts); the host only says when the stream is down.
 //
 // Transport (the `execai ui` contract, E101):
 //   POST /in       one ide-protocol In message as JSON → 204;
@@ -74,43 +77,26 @@ function boot(): void {
       (table[message] ?? message).replace(/\{(\d+)\}/g, (m, i) => (+i < args.length ? String(args[+i]) : m)),
   };
 
-  // ── the page furniture: header, toasts, dialog ──
-  const hdr = document.getElementById('hdr') as HTMLElement;
+  // ── the page furniture: toasts, the dialog, the connection line ──
   const toasts = document.getElementById('toasts') as HTMLElement;
   const dlg = document.getElementById('dlg') as HTMLElement;
-  hdr.innerHTML = '';
-  const statusEl = el('span', 'hdr-status', 'ExecAI');
-  const connEl = el('span', 'hdr-conn', '');
-  const whereEl = el('span', 'hdr-where', [cfg.cwd, cfg.version ? 'execai ' + cfg.version : ''].filter(Boolean).join(' · '));
-  whereEl.title = cfg.cwd || '';
-  hdr.appendChild(statusEl);
-  hdr.appendChild(connEl);
-  hdr.appendChild(whereEl);
-  // The machine card, as the editor opens it from the panel title bar.
-  const machineBtn = el('button', 'hdr-machine', '\u{1F5A5}');
-  machineBtn.title = l10n.t('My machine');
-  machineBtn.onclick = () => core.toggleMachine();
-  hdr.appendChild(machineBtn);
+  // The editor's status bar text, for a screen reader: the window draws the
+  // same state itself.
+  const statusEl = document.getElementById('srStatus') as HTMLElement;
+  // Shown only while the event stream is down.
+  const connEl = document.getElementById('conn') as HTMLElement;
   document.title = cfg.cwd ? basename(cfg.cwd) + ' — ExecAI' : 'ExecAI';
 
+  // Desktop notifications go out only by permission; the window asks for it
+  // with a click (its look-and-theme panel).
   const canNotify = () => typeof Notification !== 'undefined';
-  // Desktop notifications only by permission, asked for with a click.
-  if (canNotify() && Notification.permission === 'default') {
-    const bell = el('button', 'hdr-bell', '\u{1F514}');
-    bell.title = l10n.t('Notify me when a chat finishes or asks while this tab is in the background');
-    bell.onclick = () => {
-      try {
-        void Promise.resolve(Notification.requestPermission()).then(() => bell.remove(), () => bell.remove());
-      } catch {
-        bell.remove();
-      }
-    };
-    hdr.appendChild(bell);
-  }
-  /** A desktop notification — only when the tab is hidden and it is allowed. */
+  /** The page is in front of the person: the tab visible, its window focused. */
+  const looking = () =>
+    !document.hidden && (typeof document.hasFocus !== 'function' || document.hasFocus());
+  /** A desktop notification — only when nobody is looking and it is allowed. */
   const notify = (text: string, onClick?: () => void) => {
     try {
-      if (!canNotify() || Notification.permission !== 'granted' || !document.hidden) return;
+      if (!canNotify() || Notification.permission !== 'granted' || looking()) return;
       const n = new Notification('ExecAI', { body: text, tag: 'execai' });
       n.onclick = () => {
         try { window.focus(); } catch { /* not ours to focus */ }
@@ -143,6 +129,16 @@ function boot(): void {
       const x = el('i', '', '×');
       x.title = l10n.t('Close');
       x.onclick = () => finish(undefined);
+      // Closed from the keyboard as well: a toast may stay for a minute.
+      x.tabIndex = 0;
+      x.setAttribute('role', 'button');
+      x.setAttribute('aria-label', l10n.t('Close'));
+      x.onkeydown = (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        e.stopPropagation();
+        finish(undefined);
+      };
       n.appendChild(x);
       toasts.appendChild(n);
       // Three at most: the oldest goes first.
@@ -338,16 +334,17 @@ function boot(): void {
       window.dispatchEvent(new MessageEvent('message', { data: e, origin: HOST_ORIGIN }));
     },
     uiReady: connect,
-    status: (text, tooltip) => {
+    status: (text) => {
       statusEl.textContent = plain(text);
-      statusEl.title = tooltip || '';
     },
     info: (message, ...actions) => toast(message, actions, false),
     warn,
+    // PanelCore raises the toast (and with it the desktop notification)
+    // when nobody is looking; here the page only asks to come forward.
     reveal: () => {
       try { window.focus(); } catch { /* not ours to focus */ }
-      notify(l10n.t('The agent is waiting for your answer.'));
     },
+    attentive: looking,
     openExternal: (url) => { window.open(url, '_blank', 'noopener,noreferrer'); },
     copy: (text) => {
       const fail = () => warn(l10n.t('Could not copy to the clipboard.'));

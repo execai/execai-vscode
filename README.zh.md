@@ -26,7 +26,9 @@
 - **手机二维码** —— 最后一步中的 **Show the QR code** 和卡片上的 **QR for the phone**：用手机摄像头对准它，网页版对话就会打开并选中这台机器。二维码直接在面板中绘制，不从网络获取任何内容
 - **子智能体** —— 当智能体把工作分给子智能体时，输入框上方的 **Agents** 区块会逐个列出：状态、标题、「step 12/50 · 38 left」（剩余 5 步及以下时变黄）、最近使用的工具和运行时长；仍在运行的带 **+25** 和 **Stop**，显示「hit the step limit」的可用 **Continue (+25)** 从中断处继续。点击某一行会在只读标签页中打开它目前的工作；`>_` 菜单中的 **Subagent steps** 设置新子智能体的步数上限（1–100，默认 50）
 - **来自网页和手机的任务** —— 在网页版对话或手机上发起的任务会在这里以新对话打开：标签页带 🌐，第一条消息为「From the web: …」，弹出带 **Open** 的提示「A task came in from the web: …」，整个回合在面板中流式显示；权限请求可以在这里或网站上回答，以先到者为准。需要登录、包含网页任务功能的 ExecAI 套餐（面板会说明是哪种并给出套餐链接），以及把文件夹绑定到项目——`>_` 菜单中的 **Project**。状态栏和菜单会显示这台机器上由谁接收任务；若任务由后台的 `execai serve` 接收，可点 **Accept here** 改由此处接收
-- **浏览器中的同一面板** —— 智能体的 `execai ui` 命令会在 127.0.0.1 的浏览器标签页中打开这一面板，无需编辑器；通过 SSH 时转发端口，并在本地打开打印出的链接。指南：[docs/en/ui.md](https://github.com/execai/execai-agent/blob/main/docs/en/ui.md)
+- **独立窗口中的同一对话** —— 智能体的 `execai ui` 命令无需编辑器即可打开对话：没有标签页和地址栏的窗口（没有合适的浏览器时为浏览器标签页），三种外观，各有浅色和深色主题；通过 SSH 时转发端口，并在本地打开打印出的链接。指南：[docs/en/ui.md](https://github.com/execai/execai-agent/blob/main/docs/en/ui.md)
+- **通知** —— 当前显示的对话结束本轮或等待你的回答，而面板被隐藏或编辑器窗口处于后台时，会弹出通知，其中的 **Open** 按钮会把面板切到该对话；你自己停止的回合不会通知。编辑器窗口处于后台时，配合更新后的智能体，改由智能体本身显示桌面通知（仅限你自己的电脑；远程会话中仍使用编辑器内通知）。在 `execai ui` 中，页面顶部的 🔔 按钮可开启浏览器通知。在编辑器中可用 `execai.notifications` 设置将其关闭
+- **同步消息** —— 智能体同步给出的提示（在文件旁保留的副本、被跳过的文件、从服务器取来的版本）会以服务行的形式显示在对话中，并保留换行；同步命令在终端中输入：`execai sync`。指南：[docs/en/sync.md](https://github.com/execai/execai-agent/blob/main/docs/en/sync.md)
 
 数据源（ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…）、模型、记忆和权限都在 CLI 中配置，扩展直接使用你当前的配置。数据源也可以是 **你自己的端点** —— 任意 OpenAI 或 Anthropic 兼容地址（LM Studio、vLLM、LiteLLM、公司网关）：在 `>_` 菜单中选择 **Connect a source → Custom provider**，填写名称、接口类型、地址和密钥。模型列表来自提供商本身。
 
@@ -42,7 +44,7 @@
    - 或手动安装：从 [Releases](https://github.com/execai/execai-vscode/releases) 下载 `.vsix` → `Extensions: Install from VSIX…`
 2. 打开一个项目文件夹，左侧会出现 ExecAI 图标。
 3. 首次启动时，扩展会提示**下载智能体**（约 7 MB），它会放进扩展自己的存储目录，
-   无需 sudo。如果 PATH 中已有足够新的 execai（R7.10+），则直接使用它。
+   无需 sudo。如果 PATH 中已有足够新的 execai（R7.21+），则直接使用它。
 
 随后可直接在面板中登录并接入模型：**Getting started** 的每个步骤都有对应按钮，`>_` 菜单里也有同样的入口（「Sign in to ExecAI」「Connect a source」）。
 
@@ -61,6 +63,7 @@ curl -fsSL https://raw.githubusercontent.com/execai/execai-agent/main/install.sh
 | `execai.attachContext` | `true` | 将当前文件与选中内容附加到消息。 |
 | `execai.autoInstall` | `true` | 当智能体缺失或过旧时提示下载。 |
 | `execai.resumeLastChat` | `true` | 打开面板时继续本项目的上一个对话；关闭则每次从空白开始。 |
+| `execai.notifications` | `true` | 当对话结束本轮或等待你的回答，而面板被隐藏或编辑器窗口处于后台时发出通知：在编辑器内（按钮会打开该对话），或在窗口处于后台时以桌面通知提醒。 |
 
 ## 工作原理
 

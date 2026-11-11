@@ -9,11 +9,13 @@
 // into the inline script as `T`, so runtime text is translated the same way as
 // the static markup.
 //
-// The same page also runs in a browser, served by `execai ui` (browserHtml):
-// there it talks to window.execaiHost (browserHost.ts) instead of
-// acquireVsCodeApi(), gets defaults for the --vscode-* variables, a header in
-// place of the status bar, and hides what only an editor can do (open a file,
-// a terminal, restart the agent).
+// The same script also runs in a browser, served by `execai ui` (browserHtml
+// in browserPage.ts): there it talks to window.execaiHost (browserHost.ts)
+// instead of acquireVsCodeApi(), and the page around it is the window of
+// `execai ui` — its own markup, stylesheet and draw functions (src/window,
+// src/skins) — with what only an editor can do hidden (open a file, a
+// terminal, restart the agent). The page of the editor panel must not change
+// when the window does: test/window.test.mjs keeps its text byte for byte.
 
 import * as vscode from 'vscode';
 import { renderMarkdown } from './markdown';
@@ -396,150 +398,34 @@ export function chatHtml(_webview: vscode.Webview, _extensionUri: vscode.Uri, la
 export const NONCE_SLOT = '{{NONCE}}';
 export const CONFIG_SLOT = '{{CONFIG}}';
 
-/**
- * The same chat page for a browser, as `execai ui` serves it
- * (dist/panel-browser.<lang>.html, built by `npm run build:panel`).
- *
- * hostJs is the bundled browserHost.ts; l10n is the translation table of the
- * extension host strings (l10n/bundle.l10n.<lang>.json), which PanelCore
- * needs in the page. The server replaces every {{NONCE}} with a fresh nonce
- * and {{CONFIG}} — a JavaScript literal inside the host script — with JSON
- * {lang, cwd, version, upload} (<, >, & and ' escaped as \u…).
- */
-export function browserHtml(lang: string | undefined, hostJs: string, l10n: Record<string, string> = {}): string {
-  return panelPage(pickLang(lang), { nonce: NONCE_SLOT, browser: { hostJs, l10n } });
-}
-
 /** Text for an inline <script>: nothing in it may close the tag early. */
 function inlineSafe(js: string): string {
   return js.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--');
 }
 
 /**
- * Defaults for the editor theme variables in a browser, [light, dark] —
- * VS Code's Light Modern and Dark Modern. A webview gets these from the
- * editor; a plain browser tab has none, and every colour would fall through.
+ * What the browser page puts around the panel script: the window of
+ * `execai ui`. Built in browserPage.ts, so that the extension bundle — which
+ * only ever calls chatHtml — carries none of it.
  */
-const THEME_DEFAULTS: Record<string, [string, string]> = {
-  'foreground': ['#3b3b3b', '#cccccc'],
-  'descriptionForeground': ['#6f6f6f', '#9d9d9d'],
-  'errorForeground': ['#c72e0f', '#f85149'],
-  'sideBar-background': ['#f8f8f8', '#181818'],
-  'editor-background': ['#ffffff', '#1f1f1f'],
-  'panel-border': ['#e5e5e5', '#2b2b2b'],
-  'focusBorder': ['#005fb8', '#0078d4'],
-  'list-hoverBackground': ['#f0f0f0', '#2a2d2e'],
-  'input-background': ['#ffffff', '#313131'],
-  'input-border': ['#cecece', '#3c3c3c'],
-  'input-foreground': ['#3b3b3b', '#cccccc'],
-  'button-background': ['#005fb8', '#0078d4'],
-  'button-foreground': ['#ffffff', '#ffffff'],
-  'button-hoverBackground': ['#0258a8', '#026ec1'],
-  'button-border': ['#0000001a', '#ffffff12'],
-  'button-secondaryBackground': ['#e5e5e5', '#313131'],
-  'button-secondaryForeground': ['#3b3b3b', '#cccccc'],
-  'badge-background': ['#cccccc', '#616161'],
-  'badge-foreground': ['#3b3b3b', '#f8f8f8'],
-  'textLink-foreground': ['#005fb8', '#4daafc'],
-  'textCodeBlock-background': ['#f2f2f2', '#2b2b2b'],
-  'progressBar-background': ['#005fb8', '#0078d4'],
-  'inputValidation-warningBorder': ['#b89500', '#b89500'],
-  'editorWarning-foreground': ['#bf8803', '#cca700'],
-  'toolbar-hoverBackground': ['#b8b8b850', '#5a5d5e50'],
-  'scrollbarSlider-background': ['#64646466', '#79797966'],
-  'scrollbarSlider-hoverBackground': ['#646464b3', '#646464b3'],
-  'tab-activeBackground': ['#ffffff', '#1f1f1f'],
-  'tab-activeForeground': ['#3b3b3b', '#ffffff'],
-  'tab-inactiveBackground': ['#f8f8f8', '#181818'],
-  'tab-inactiveForeground': ['#868686', '#9d9d9d'],
-  'editorGroupHeader-tabsBackground': ['#f8f8f8', '#181818'],
-  'menu-background': ['#ffffff', '#1f1f1f'],
-  'menu-foreground': ['#3b3b3b', '#cccccc'],
-  'menu-border': ['#cecece', '#454545'],
-  'menu-selectionBackground': ['#005fb8', '#0078d4'],
-  'menu-selectionForeground': ['#ffffff', '#ffffff'],
-  'menu-separatorBackground': ['#d4d4d4', '#454545'],
-  'charts-green': ['#388a34', '#89d185'],
-};
-const FONT_DEFAULTS: Record<string, string> = {
-  'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", sans-serif',
-  'editor-font-family': 'ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace',
-};
-
-/** The browser-only stylesheet: theme defaults, the header, toasts, dialogs. */
-function browserCss(): string {
-  const vars = (i: 0 | 1) => Object.entries(THEME_DEFAULTS)
-    .map(([k, v]) => `    --vscode-${k}: ${v[i]};`).join('\n');
-  const fonts = Object.entries(FONT_DEFAULTS).map(([k, v]) => `    --vscode-${k}: ${v};`).join('\n');
-  return `
-  /* ── browser page (execai ui): the editor theme is not there, so its
-     variables get defaults — light or dark after the system setting. */
-  :root {
-${fonts}
-${vars(0)}
-    color-scheme: light dark;
-  }
-  @media (prefers-color-scheme: dark) {
-  :root {
-${vars(1)}
-  }
-  }
-  html { background: var(--vscode-sideBar-background); }
-  body.browser { max-width: 920px; margin: 0 auto;
-    border-left: 1px solid var(--vscode-panel-border); border-right: 1px solid var(--vscode-panel-border); }
-  #hdr { display: flex; gap: 8px; align-items: center; padding: 6px 10px; font-size: 12px;
-    color: var(--vscode-descriptionForeground); border-bottom: 1px solid var(--vscode-panel-border); }
-  #hdr .hdr-status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: var(--vscode-foreground); }
-  #hdr .hdr-where { min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #hdr .hdr-conn:empty { display: none; }
-  #hdr .hdr-conn { color: var(--vscode-inputValidation-warningBorder); white-space: nowrap; }
-  #hdr button { font: inherit; cursor: pointer; border: none; border-radius: 4px; padding: 1px 6px;
-    background: transparent; color: inherit; }
-  #hdr button:hover { background: var(--vscode-toolbar-hoverBackground); }
-  #toasts { display: flex; flex-direction: column; gap: 4px; padding: 0 8px; }
-  #toasts:empty { display: none; }
-  .toast { display: flex; gap: 8px; align-items: center; margin-top: 6px; padding: 6px 9px;
-    border-radius: 6px; font-size: 12px; animation: exIn 160ms ease-out;
-    background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); }
-  .toast.warn { border-color: var(--vscode-inputValidation-warningBorder); }
-  .toast span { flex: 1; min-width: 0; word-break: break-word; }
-  .toast button { font: inherit; font-size: 11.5px; cursor: pointer; padding: 2px 9px; border-radius: 4px;
-    border: 1px solid var(--vscode-button-border); background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground); }
-  .toast i { font-style: normal; cursor: pointer; opacity: .6; padding: 0 3px; }
-  .toast i:hover { opacity: 1; }
-  #dlg { display: none; position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.35);
-    align-items: flex-start; justify-content: center; padding: 12vh 16px 0; }
-  #dlg.open { display: flex; }
-  .dlg-box { width: 100%; max-width: 480px; padding: 12px; border-radius: 8px;
-    background: var(--vscode-menu-background); color: var(--vscode-menu-foreground);
-    border: 1px solid var(--vscode-menu-border); box-shadow: 0 8px 28px rgba(0,0,0,.35); }
-  .dlg-title { font-weight: 600; margin-bottom: 6px; }
-  .dlg-prompt { color: var(--vscode-descriptionForeground); font-size: 12px; margin-bottom: 8px; }
-  .dlg-input { width: 100%; padding: 6px 8px; font: inherit; border-radius: 4px; outline: none;
-    color: var(--vscode-input-foreground); background: var(--vscode-input-background);
-    border: 1px solid var(--vscode-input-border); }
-  .dlg-input:focus { border-color: var(--vscode-focusBorder); }
-  .dlg-err { color: var(--vscode-errorForeground); font-size: 11.5px; min-height: 16px; margin-top: 4px; }
-  .dlg-list { display: flex; flex-direction: column; gap: 3px; max-height: 50vh; overflow-y: auto; }
-  .dlg-item { text-align: left; padding: 6px 9px; border-radius: 5px; cursor: pointer; font: inherit;
-    color: inherit; background: transparent; border: 1px solid var(--vscode-panel-border); }
-  .dlg-item:hover, .dlg-item:focus { background: var(--vscode-list-hoverBackground); outline: none; }
-  .dlg-item small { margin-left: 6px; color: var(--vscode-descriptionForeground); }
-  .dlg-detail { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
-  .dlg-btns { display: flex; gap: 6px; justify-content: flex-end; margin-top: 10px; }
-  .dlg-btns button { padding: 4px 12px; border-radius: 4px; cursor: pointer; font: inherit;
-    border: 1px solid var(--vscode-button-border); background: var(--vscode-button-secondaryBackground);
-    color: var(--vscode-button-secondaryForeground); }
-  .dlg-btns button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-  /* No editor to open a file in: paths in answers are plain text here. */
-  body.browser .assistant a[data-file] { cursor: text; color: inherit; text-decoration: none; }
-  body.browser .files span { cursor: default; }
-`;
+export interface WindowParts {
+  /** The whole stylesheet: tokens, the shared structure, the skins. */
+  css: string;
+  /** Everything inside <body> before the scripts. */
+  markup: string;
+  /** Runs in <head> before the first paint: the chosen skin and theme. */
+  head: string;
+  /** Appended to the panel script: the window's draw functions. */
+  script: string;
+  /** Strings of the window, merged over STRINGS[lang] into T. */
+  strings: Record<string, string>;
 }
 
-function panelPage(code: ChatLang, o: { nonce: string; browser?: { hostJs: string; l10n: Record<string, string> } }): string {
+/** The page of the panel; with `browser` — the page `execai ui` serves. */
+export function panelPage(
+  code: ChatLang,
+  o: { nonce: string; browser?: { hostJs: string; l10n: Record<string, string>; win: WindowParts } },
+): string {
   const nonce = o.nonce;
   const browser = !!o.browser;
   // Исходник рендерера уезжает в панель как есть: так у панели и у тестов
@@ -550,7 +436,8 @@ function panelPage(code: ChatLang, o: { nonce: string; browser?: { hostJs: strin
   const showStartSource = showStart.toString();
   const startStepsSource = startSteps.toString();
   const machineRowsSource = machineRows.toString();
-  const T = STRINGS[code];
+  const win = o.browser?.win;
+  const T = win ? { ...STRINGS[code], ...win.strings } : STRINGS[code];
   const csp = browser
     ? `default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; form-action 'none';`
     : `default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`;
@@ -559,8 +446,8 @@ function panelPage(code: ChatLang, o: { nonce: string; browser?: { hostJs: strin
 <head>
 <meta charset="UTF-8">${browser ? '\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>ExecAI</title>' : ''}
 <meta http-equiv="Content-Security-Policy"
-      content="${csp}">
-<style>
+      content="${csp}">${win ? `\n<meta name="color-scheme" content="light dark">\n<script nonce="${nonce}">${inlineSafe(win.head)}</script>` : ''}
+<style>${win ? win.css : `
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
@@ -759,8 +646,11 @@ function panelPage(code: ChatLang, o: { nonce: string; browser?: { hostJs: strin
     cursor: pointer; font-size: 11px; border-radius: 4px; padding: 2px 7px;
     background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
   }
-  .notice { color: var(--vscode-descriptionForeground); font-size: 12px; margin: 6px 0; }
-  .error { color: var(--vscode-errorForeground); font-size: 12px; margin: 6px 0; white-space: pre-wrap; }
+  /* Notices and errors keep the agent's line breaks (a sync notice names a
+     file on one line and where its copy is on the next); a long path with no
+     space in it still wraps instead of widening the log. */
+  .notice { color: var(--vscode-descriptionForeground); font-size: 12px; margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .error { color: var(--vscode-errorForeground); font-size: 12px; margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   #composer { border-top: 1px solid var(--vscode-panel-border); padding: 7px; }
   #chips { display: flex; flex-wrap: wrap; gap: 4px; }
   #chips:empty { display: none; }
@@ -1002,11 +892,9 @@ function panelPage(code: ChatLang, o: { nonce: string; browser?: { hostJs: strin
   .qr-link { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 11px;
     color: var(--vscode-descriptionForeground); word-break: break-all; }
   .qr-link button { margin-top: 0; padding: 1px 8px; }
-${browser ? browserCss() : ''}</style>
+`}</style>
 </head>
-<body${browser ? ' class="browser"' : ''}>${browser ? `
-  <div id="hdr"></div>
-  <div id="toasts"></div>` : ''}
+<body${browser ? ' class="browser"' : ''}>${win ? win.markup : `
   <div id="tabs"></div>
   <div id="machine"></div>
   <div id="start"></div>
@@ -1031,9 +919,8 @@ ${browser ? browserCss() : ''}</style>
         <button id="stopBtn" title="${T.stopTitle}">■</button>
       </div>
     </div>
-  </div>
-${browser ? `  <div id="dlg"></div>
-<script nonce="${nonce}">
+  </div>`}
+${browser ? `<script nonce="${nonce}">
 window.execaiPage = ${inlineSafe(JSON.stringify({ T, l10n: o.browser!.l10n }))};
 window.execaiPage.config = ${CONFIG_SLOT};
 ${inlineSafe(o.browser!.hostJs)}
@@ -1827,7 +1714,7 @@ function pathsFromDataTransfer(dt) {
   return [...new Set(out)];
 }
 let dragDiagShown = false;
-window.addEventListener('dragenter', (e) => {
+${win ? '' : `window.addEventListener('dragenter', (e) => {
   // Field diagnostics: show what we see, once per drag.
   if (dragDiagShown) return;
   dragDiagShown = true;
@@ -1835,7 +1722,7 @@ window.addEventListener('dragenter', (e) => {
   log.appendChild(el('div', 'notice', T.dragSeen + (types.join(', ') || T.dragNone)));
   scroll();
 }, true);
-window.addEventListener('dragover', (e) => {
+`}window.addEventListener('dragover', (e) => {
   e.preventDefault();
   document.body.classList.add('dragover');
 }, true);
@@ -2133,7 +2020,7 @@ window.addEventListener('message', (ev) => {
       break;
     }
     case 'tool_call': {
-      curAssistant = null; curThinking = null;
+${win ? `      winToolCall(e);` : `      curAssistant = null; curThinking = null;
       const box = el('div', 'tool');
       const head = el('div', 'tool-head');
       head.appendChild(el('span', 'tool-name', e.tool || ''));
@@ -2147,7 +2034,7 @@ window.addEventListener('message', (ev) => {
       box.appendChild(head); box.appendChild(out);
       log.appendChild(box);
       tools[e.id] = { box, out, state };
-      scroll();
+      scroll();`}
       break;
     }
     case 'tool_chunk': {
@@ -2156,10 +2043,10 @@ window.addEventListener('message', (ev) => {
       break;
     }
     case 'tool_result': {
-      const t = tools[e.id]; if (!t) break;
+${win ? `      winToolResult(e);` : `      const t = tools[e.id]; if (!t) break;
       t.box.classList.remove('run');
       t.state.textContent = e.ok ? '✓' : '✗';
-      if (!t.out.textContent) t.out.textContent = e.tail || '';
+      if (!t.out.textContent) t.out.textContent = e.tail || '';`}
       break;
     }
     case 'ask': addAsk(e, true); break;
@@ -2185,7 +2072,7 @@ window.addEventListener('message', (ev) => {
       if (menuView === 'root') menuRoot();
       break;
     case 'files_changed': {
-      const wrap = el('div', 'files');
+${win ? `      winFilesChanged(e);` : `      const wrap = el('div', 'files');
       wrap.appendChild(el('span', '', '📝'));
       for (const p of e.paths || []) {
         const chip = el('span', '', p);
@@ -2193,7 +2080,7 @@ window.addEventListener('message', (ev) => {
         wrap.appendChild(chip);
       }
       log.appendChild(wrap);
-      scroll();
+      scroll();`}
       break;
     }
     case 'done':
@@ -2235,8 +2122,8 @@ window.addEventListener('message', (ev) => {
       // first turn of a chat known to be from the site is that task.
       const web = e.origin === 'web' ||
         (!e.origin && isWebChat(e.chat) && !log.querySelector('.msg.user'));
-      log.appendChild(el('div', 'msg user auto' + (web ? ' web' : ''),
-        (web ? '\u{1F310} ' + T.webTurn : '\u{1F319} ' + T.autoTurn) + (e.text || '')));
+${win ? `      log.appendChild(winUserBubble(e.text || '', null, web ? 'web' : 'auto'));` : `      log.appendChild(el('div', 'msg user auto' + (web ? ' web' : ''),
+        (web ? '\u{1F310} ' + T.webTurn : '\u{1F319} ' + T.autoTurn) + (e.text || '')));`}
       scroll();
       break;
     }
@@ -2317,7 +2204,7 @@ window.addEventListener('message', (ev) => {
       document.body.classList.add('agentview');
       log.innerHTML = '';
       tools = {}; asks = {}; curAssistant = null; curThinking = null;
-      log.appendChild(el('div', 'notice agent-head', '\u{1F916} ' + (e.title || e.id) +
+      log.appendChild(el('div', 'notice agent-head', ${win ? '' : `'\u{1F916} ' + `}(e.title || e.id) +
         (e.state ? ' \u00b7 ' + agentStateLabel(e.state) : '')));
       renderHistory(e.messages, false);
       if (e.error) log.appendChild(el('div', 'error', e.error));
@@ -2444,7 +2331,7 @@ window.addEventListener('message', (ev) => {
   }
   if (START_EVENTS[e.type]) renderStart();
 });
-</script>
+${win ? win.script + '\n' : ''}</script>
 </body>
 </html>`;
 }

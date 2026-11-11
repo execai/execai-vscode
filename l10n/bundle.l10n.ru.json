@@ -131,7 +131,6 @@
   "reconnecting…": "переподключение…",
   "{0} is larger than 25 MB — not attached.": "{0} больше 25 МБ — не приложен.",
   "Could not upload {0}.": "Не удалось загрузить {0}.",
-  "The agent is waiting for your answer.": "Агент ждёт твоего ответа.",
   "Could not copy to the clipboard.": "Не удалось скопировать в буфер обмена.",
   "My machine": "Моя машина"
 }

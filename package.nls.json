@@ -13,6 +13,7 @@
   "cfg.maxIterations": "Tool iteration limit per turn (0 — take it from the execai config).",
   "cfg.attachContext": "Attach the active file and selection to the message.",
   "cfg.autoInstall": "Offer to download the execai agent when it is missing or outdated.",
+  "cfg.notifications": "Notify when a chat finishes its turn or waits for your answer while the panel is hidden or the editor window is in the background: inside the editor (its button opens that chat), or with a desktop notification while the window is in the background.",
   "cmd.checkUpdates": "ExecAI Studio: Check for Updates…",
   "cmd.machine": "ExecAI: My machine",
   "cmd.start": "ExecAI: Getting started"

@@ -4,8 +4,11 @@ node_modules/**
 esbuild.mjs
 tsconfig.json
 *.map
+**/*.map
+scripts/**
 .gitignore
 docs/**
 dist/panel-browser.*.html
 _wt/**
 *.vsix
+.claude/**

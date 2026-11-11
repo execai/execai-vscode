@@ -3,6 +3,45 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.40 — 2026-11-12
+
+### Added
+
+- **Notifications.** When the chat on screen finishes its turn or waits for
+  your answer while the panel is hidden or the editor window is in the
+  background, a notification says so; its **Open** button brings the panel
+  forward on that chat. One notification per question — coming back to the
+  chat does not repeat it, and a turn you stopped yourself is not announced.
+  The new `execai.notifications` setting (on by default) turns these off
+  together with the turn and question notifications of the chats that are
+  not on screen; error notifications stay.
+- **A desktop notification while the editor is in the background.** A
+  notification inside a window you are not looking at is seen by nobody, so
+  then the agent shows one on the desktop instead (on your own computer; in
+  a remote session — SSH, WSL, a container — the in-editor one stays). Needs
+  an agent that offers it; with an older one nothing changes.
+- **Sync messages in the panel.** What sync says — a copy kept next to a
+  file, a file left out, a version taken from the server — now shows in the
+  chat as a service line, as in the terminal. Sync commands are typed in a
+  terminal: `execai sync`.
+
+### Changed
+
+- **The panel requires the agent 7.21 and offers to update an older one.**
+  In 7.15 and earlier, sync could erase a project's memory on all your
+  computers when one of them bound the project to an empty or freshly
+  cloned folder; 7.21 fills such a folder from the server instead, decides
+  every file by its content and keeps what it replaces. With it, project
+  memory travels between your computers with sync, a task from the web runs
+  only in the folder this computer bound to the project, and every notice
+  and error of the panel follows the interface language.
+
+### Fixed
+
+- A notice of several lines no longer runs together into one paragraph,
+  and a long path in a notice or an error wraps instead of widening the
+  chat.
+
 ## 0.2.39 — 2026-11-10
 
 ### Added
@@ -22,7 +61,7 @@ All notable changes to the ExecAI extension are listed here. Versions follow
 
 ### Changed
 
-- **The panel updates the agent to 7.9**, which describes its machine; with
+- **The panel updates the agent to 7.10**, which describes its machine; with
   an older agent both cards stay hidden and the machine card asks to update it.
 
 ## 0.2.38 — 2026-11-04

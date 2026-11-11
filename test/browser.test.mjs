@@ -1,7 +1,8 @@
 // The browser page of `execai ui` (browserHtml + browserHost.ts), run on a
 // fake DOM with fake fetch/EventSource: the transport shim, the translation
 // of the panel's messages into the ide protocol, the HTML dialogs, uploads,
-// the theme defaults — and that the VS Code page did not change.
+// the window around the chat — and that the VS Code page did not change
+// (test/window.test.mjs keeps the look of the window and the editor page).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -59,9 +60,13 @@ for (const bundle of BUNDLES) {
     await p.flush();
     const notes = p.byId('log').querySelectorAll('.notice').map((n) => n.textContent);
     assert.ok(notes.some((t) => t.includes('glm · execai')), 'the panel drew ready');
-    // The status bar of the editor is the header here.
-    assert.equal(p.byId('hdr').querySelector('.hdr-status').textContent, 'ExecAI: glm · execai');
-    assert.ok(p.byId('hdr').querySelector('.hdr-where').textContent.includes(CWD));
+    // The status bar of the editor: read out for a screen reader; the window
+    // shows the model and the source under the input, the folder in the sidebar.
+    assert.equal(p.byId('srStatus').textContent, 'ExecAI: glm · execai');
+    assert.equal(p.byId('selModel').querySelector('.sel-v').textContent, 'glm');
+    assert.equal(p.byId('selSource').querySelector('.sel-v').textContent, 'execai');
+    assert.equal(p.byId('projPath').textContent, CWD);
+    assert.equal(p.byId('projName').textContent, 'proj');
     assert.equal(p.document.title, 'proj — ExecAI');
     // POST /in: JSON, one message each, in order.
     const posts = p.requests.filter((r) => r.url === '/in');
@@ -97,7 +102,7 @@ for (const bundle of BUNDLES) {
     p.emit({ type: 'ask', chat: 'c1', id: 'q1', tool: 'bash', options: [{ value: 'once', label: 'Once' }] });
     p.byId('log').querySelector('.ask').querySelector('button').onclick();
     p.emit({ type: 'chats', chats: [{ id: 'c1', label: 'main', active: true }] });
-    p.byId('tabs').querySelector('.newtab').onclick();
+    p.byId('newTab').onclick();
     await p.flush();
     assert.deepEqual(p.ins().filter((m) => m.name !== 'state' && m.name !== 'list_chats'), [
       { type: 'command', name: 'set_source', value: 'zai' },
@@ -274,8 +279,9 @@ for (const bundle of BUNDLES) {
     p.emit({ type: 'files_changed', chat: null, paths: ['main.go'] });
     await p.flush();
     assert.deepEqual(p.ins(), []);
-    const chip = p.byId('log').querySelector('.files').querySelectorAll('span')[1];
-    assert.equal(chip.onclick, undefined, 'changed files are not links here');
+    const row = p.byId('log').querySelector('.changed').querySelector('.frow');
+    assert.equal(row.title, 'main.go');
+    assert.equal(row.onclick, undefined, 'changed files are not links here');
   });
 
   test('only the host may talk to the panel' + tag, async () => {
@@ -377,7 +383,7 @@ test('browser page: CSP with connect-src, the server slots, valid scripts', () =
     for (const lang of ['en', 'ru']) {
       const page = html(bundle, lang);
       assert.ok(page.includes(`script-src 'nonce-{{NONCE}}'; connect-src 'self'`), 'CSP');
-      assert.equal(page.split('{{NONCE}}').length - 1, 3, 'the CSP and two scripts');
+      assert.equal(page.split('{{NONCE}}').length - 1, 4, 'the CSP and three scripts: the look, the host, the panel');
       assert.equal(page.split('{{CONFIG}}').length - 1, 1);
       assert.ok(page.includes('window.execaiPage.config = {{CONFIG}};'));
       assert.ok(page.includes(`<html lang="${lang}">`));
@@ -391,23 +397,6 @@ test('browser page: CSP with connect-src, the server slots, valid scripts', () =
     }
   }
   assert.ok(!/[А-Яа-я]/.test(html(BUNDLES[0], 'en')), 'the English page has no Cyrillic');
-});
-
-test('theme defaults: in the browser page only, light and dark, for every variable used', () => {
-  const { chatHtml } = load(BUNDLES[0]);
-  const vsc = chatHtml({}, {});
-  const page = html(BUNDLES[0]);
-  assert.ok(!/--vscode-[\w-]+\s*:/.test(vsc), 'the webview defines no --vscode-* itself');
-  assert.ok(!vsc.includes('connect-src'), 'the webview CSP is unchanged');
-  const used = new Set([...page.matchAll(/var\(--vscode-([\w-]+)/g)].map((m) => m[1]));
-  const light = page.slice(page.indexOf(':root {'), page.indexOf('@media (prefers-color-scheme: dark)'));
-  const dark = page.slice(page.indexOf('@media (prefers-color-scheme: dark)'));
-  const defined = (css) => new Set([...css.matchAll(/--vscode-([\w-]+)\s*:/g)].map((m) => m[1]));
-  const L = defined(light), D = defined(dark.slice(0, dark.indexOf('html {')));
-  for (const v of used) {
-    assert.ok(L.has(v), `no light default for --vscode-${v}`);
-    if (!v.endsWith('font-family')) assert.ok(D.has(v), `no dark default for --vscode-${v}`);
-  }
 });
 
 test('the VS Code page still talks to acquireVsCodeApi and draws as before', () => {

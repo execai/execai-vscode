@@ -15,6 +15,7 @@
 import {
   AgentEvent, AgentPort, EditorCtx, InboxInfo, MachineState, Workspace, PAYMENT_URL, PROTOCOL,
   displayUrl, parseInbox, parseWorkspaces, isWeb, firstWords, parseMachineState, isMachineStateRefusal,
+  isNotifyRefusal, NotifyKind,
 } from './protocol';
 import { QrPicture, qrPicture } from './qr';
 
@@ -109,6 +110,19 @@ export interface PanelHost {
    * asked for it, or when it shows that chat already, or shows none yet.
    */
   sharedStream?: boolean;
+  /**
+   * The person is looking at the panel: it is visible and its window has
+   * focus. Absent — taken as looking (nothing extra is announced).
+   */
+  attentive?(): boolean;
+  /** Turn-finished and waiting-for-you toasts are on (execai.notifications). Absent — on. */
+  notificationsOn?(): boolean;
+  /**
+   * A toast would go unseen — the editor window is in the background — and
+   * the agent runs on this very machine: ask it for a desktop notification
+   * instead. Absent — never (the browser has its own).
+   */
+  systemNotify?(): boolean;
 }
 
 /** A message from the panel page (see the postMessage calls in webviewHtml.ts). */
@@ -161,6 +175,11 @@ export class PanelCore {
   private machineKnown: boolean | null = null;
   private machineTimer: ReturnType<typeof setTimeout> | null = null;
   private qrCache: { url: string; pic: QrPicture | null } = { url: '', pic: null };
+  // Questions already announced by a toast: the agent replays an open
+  // question when its chat is opened, and that must stay quiet.
+  private toldAsks = new Set<string>();
+  // The agent offered desktop notifications in its ready (features).
+  private agentNotify = false;
 
   /** Status line without the inbox and "turn…" suffixes. Kept as a field, not
    *  scraped back out of the text: the suffixes are translated, and a regex
@@ -337,6 +356,12 @@ export class PanelCore {
   // ── agent → panel ───────────────────────────────────────────────
 
   fromAgent(e: AgentEvent): void {
+    // notify is sent only to an agent that offered it; should one refuse it
+    // anyway, the refusal is no news to the person — the toasts come back.
+    if (isNotifyRefusal(e)) {
+      this.agentNotify = false;
+      return;
+    }
     // The machine card: an older agent refusing the command is not an error
     // the user has to read; the answer goes to the panel normalized.
     if (isMachineStateRefusal(e) && this.machineKnown !== true) {
@@ -413,6 +438,9 @@ export class PanelCore {
         this.activeChat = null;
         this.adopted = false;
         this.flags.clear();
+        // A new process numbers its questions anew.
+        this.toldAsks.clear();
+        this.agentNotify = Array.isArray(e.features) && e.features.includes('notify');
         this.statusMain = `ExecAI: ${e.model ?? '?'} · ${e.source ?? ''}`;
         this.statusTurn = false;
         this.paintStatus();
@@ -444,12 +472,18 @@ export class PanelCore {
       case 'done':
         this.statusTurn = false;
         this.paintStatus();
+        // The chat on screen, but nobody looking at it: say the turn is over.
+        if (e.text !== 'stopped' && !this.looking()) this.turnDoneToast(e);
         break;
       case 'ask':
-      case 'ask_user':
+      case 'ask_user': {
+        // Whether anyone was looking is taken before the panel comes forward.
+        const away = !this.looking();
         // The user may be in another editor tab — bring the panel forward.
         this.h.reveal();
+        if (away) this.waitingToast(e);
         break;
+      }
       case 'login_start': {
         // The link opens by itself, but it must also be takeable by hand: over
         // SSH nothing opens, and the sign-in may happen in a browser on a
@@ -553,35 +587,78 @@ export class PanelCore {
 
   /** An event from a chat that is not on screen: badges, plus a toast when it needs a human. */
   private backgroundEvent(e: AgentEvent): void {
-    const l10n = this.h.l10n;
-    const open = l10n.t('Open');
-    const show = (msg: string) => {
-      void this.h.info(msg, open).then((p) => {
-        if (p !== open || !e.chat) return;
-        this.h.reveal();
-        this.agent()?.sendCommand('load_chat', e.chat);
-      });
-    };
     switch (e.type) {
       case 'done':
         if (e.text === 'stopped') break;
-        show(l10n.t('Chat «{0}» finished its turn.', this.chatName(e.chat || '')));
+        this.turnDoneToast(e);
         break;
       case 'ask':
       case 'ask_user':
-        // A subagent asks through its parent's chat: name it, or the toast
-        // points at a chat that never asked anything itself.
-        if (e.agent && (e.agent.title || e.agent.id)) {
-          show(l10n.t('Subagent «{0}» in chat «{1}» is waiting for your answer.',
-            e.agent.title || e.agent.id, this.chatName(e.chat || '')));
-        } else {
-          show(l10n.t('Chat «{0}» is waiting for your answer.', this.chatName(e.chat || '')));
-        }
+        this.waitingToast(e);
         break;
       case 'error':
-        show(l10n.t('Chat «{0}»: {1}', this.chatName(e.chat || ''), e.text || ''));
+        this.openToast(this.h.l10n.t('Chat «{0}»: {1}', this.chatName(e.chat || ''), e.text || ''), e.chat);
         break;
     }
+  }
+
+  // ── notifications: a turn over, a question waiting (E105) ───────
+
+  /** Someone is looking at the panel (see PanelHost.attentive). */
+  private looking(): boolean {
+    return this.h.attentive ? this.h.attentive() : true;
+  }
+
+  private notificationsOn(): boolean {
+    return this.h.notificationsOn ? this.h.notificationsOn() : true;
+  }
+
+  /** A toast with "Open": brings the panel forward on that chat. */
+  private openToast(msg: string, chat: string | undefined): void {
+    const open = this.h.l10n.t('Open');
+    void this.h.info(msg, open).then((p) => {
+      if (p !== open) return;
+      this.h.reveal();
+      if (chat && chat !== this.activeChat) this.agent()?.sendCommand('load_chat', chat);
+    });
+  }
+
+  /**
+   * The desktop notification through the agent, when a toast would go unseen
+   * (see PanelHost.systemNotify). Only the kind and a tool name go over; the
+   * agent builds the text. false — not possible here, show the toast.
+   */
+  private viaDesktop(kind: NotifyKind, tool?: string): boolean {
+    if (!this.agentNotify || !this.h.systemNotify?.()) return false;
+    const agent = this.agent();
+    if (!agent?.alive) return false;
+    agent.sendCommand('notify', kind, tool ? { tool } : undefined);
+    return true;
+  }
+
+  /** "Chat … finished its turn." */
+  private turnDoneToast(e: AgentEvent): void {
+    if (!this.notificationsOn()) return;
+    if (this.viaDesktop('turn_done')) return;
+    this.openToast(this.h.l10n.t('Chat «{0}» finished its turn.', this.chatName(e.chat || '')), e.chat);
+  }
+
+  /** "… is waiting for your answer." — once per question. */
+  private waitingToast(e: AgentEvent): void {
+    if (!this.notificationsOn()) return;
+    if (e.id) {
+      if (this.toldAsks.has(e.id)) return;
+      this.toldAsks.add(e.id);
+    }
+    if (e.type === 'ask' ? this.viaDesktop('approval', e.tool) : this.viaDesktop('ask')) return;
+    const l10n = this.h.l10n;
+    // A subagent asks through its parent's chat: name it, or the toast
+    // points at a chat that never asked anything itself.
+    const msg = e.agent && (e.agent.title || e.agent.id)
+      ? l10n.t('Subagent «{0}» in chat «{1}» is waiting for your answer.',
+        e.agent.title || e.agent.id, this.chatName(e.chat || ''))
+      : l10n.t('Chat «{0}» is waiting for your answer.', this.chatName(e.chat || ''));
+    this.openToast(msg, e.chat);
   }
 
   // ── panel → agent ───────────────────────────────────────────────

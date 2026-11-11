@@ -36,6 +36,9 @@ export interface AgentEvent {
   chat?: string;
   version?: string;
   protocol?: number;
+  /** ready: what the agent offers beyond the protocol — "notify": desktop
+   *  notifications on request (absent on an older agent) */
+  features?: string[];
   model?: string;
   source?: string;
   cwd?: string;
@@ -45,6 +48,8 @@ export interface AgentEvent {
   summary?: string;
   chunk?: string;
   ok?: boolean;
+  /** tool_result: the person refused the call; ok stays true (an older panel shows it as before) */
+  denied?: boolean;
   tail?: string;
   question?: string;
   options?: AskOption[];
@@ -64,7 +69,10 @@ export interface AgentEvent {
   /** state: the step limit a new subagent gets; absent on an older agent,
    *  which also knows neither extend_agent nor set_subagent_iterations. */
   subagent_iter?: number;
-  msgs?: { role: string; tool?: string; text: string }[];
+  /** chat_loaded: the saved chat. A message of the person sent with files keeps the whole
+   *  prompt in text; a newer agent also says what was typed (said), which files went
+   *  with it (files, full paths) and how many pictures the model was given (images). */
+  msgs?: { role: string; tool?: string; text: string; said?: string; files?: string[]; images?: number }[];
   /** chat_loaded: a turn is still running in the loaded chat */
   busy?: boolean;
   /** wakeup / chat_loaded: when the chat wakes up (RFC 3339) */
@@ -114,6 +122,8 @@ export interface ConnectExtra {
   label?: string;
   models?: string[];
   headers?: Record<string, string>;
+  /** notify approval: the tool asking (a plain name; the agent drops anything else) */
+  tool?: string;
 }
 
 /**
@@ -424,6 +434,14 @@ export function parseMachineState(e: AgentEvent): MachineState | null {
 export function isMachineStateRefusal(e: AgentEvent): boolean {
   return e.type === 'error' && !e.chat && /\bmachine_state\b/.test(e.text || '');
 }
+
+/** An agent answering the notify command with "unknown command: notify". */
+export function isNotifyRefusal(e: AgentEvent): boolean {
+  return e.type === 'error' && !e.chat && /:\s*notify\s*$/.test(e.text || '');
+}
+
+/** The kinds of the notify command; the agent builds the text itself. */
+export type NotifyKind = 'turn_done' | 'approval' | 'ask';
 
 /**
  * Messages to the agent — the In side of the ide protocol — as plain objects.

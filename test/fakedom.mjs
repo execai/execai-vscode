@@ -93,6 +93,15 @@ export class El {
     this.attributes[k] = String(v);
     if (k.startsWith('data-')) this.dataset[camel(k.slice(5))] = String(v);
   }
+  removeAttribute(k) {
+    delete this.attributes[k];
+    if (k.startsWith('data-')) delete this.dataset[camel(k.slice(5))];
+  }
+  /** Is n this element or inside it. */
+  contains(n) {
+    for (let p = n; p; p = p.parentElement) if (p === this) return true;
+    return false;
+  }
   getAttribute(k) {
     if (k in this.attributes) return this.attributes[k];
     if (k.startsWith('data-') && camel(k.slice(5)) in this.dataset) return this.dataset[camel(k.slice(5))];
@@ -173,9 +182,10 @@ export function openMenu(p) {
 
 /**
  * Runs the browser page of `execai ui` (browserHtml) the way a browser would:
- * every inline script in order — the host first, then the panel — in one
- * realm, with fakes for what the host uses: fetch, EventSource, localStorage,
- * the clipboard, window.open, FileReader.
+ * every inline script in order — the look (skin and theme) from <head>, the
+ * host, then the panel — in one realm, with fakes for what the host uses: fetch, EventSource, localStorage,
+ * the clipboard, window.open, FileReader; opts.globals adds more (a fake
+ * Notification).
  *
  * Returned handles: emit() delivers one SSE event from the agent, ins() lists
  * the ide-protocol messages POSTed to /in, flush() lets queued promises run,
@@ -193,6 +203,18 @@ export function runBrowserPanel(html, opts = {}) {
   };
   const winListeners = {};
   const docListeners = {};
+  // Capture listeners run before the others, as in a browser: a test that
+  // walks docListeners.keydown gets them in the order a key would.
+  const captured = new WeakSet();
+  const addDocListener = (t, f, c) => {
+    const l = (docListeners[t] ||= []);
+    if (c === true || (c && c.capture)) {
+      captured.add(f);
+      let i = 0;
+      while (i < l.length && captured.has(l[i])) i++;
+      l.splice(i, 0, f);
+    } else l.push(f);
+  };
   const body = new El('body');
   const requests = [];
   const opened = [];
@@ -200,17 +222,27 @@ export function runBrowserPanel(html, opts = {}) {
   const sources = [];
   const storage = opts.storage || new Map();
   const respond = opts.respond || (() => ({ status: 204 }));
+  // <html>: the window keeps its skin (a class) and theme (data-theme) on it.
+  const documentElement = new El('html');
+  documentElement.lang = config.lang || 'en';
   const document = {
     body,
+    documentElement,
     title: '',
     hidden: false,
     createElement: (t) => new El(t),
+    createElementNS: (_ns, t) => new El(t),
     getElementById: byId,
-    addEventListener: (t, f) => { (docListeners[t] ||= []).push(f); },
+    addEventListener: addDocListener,
   };
   const window = {
     addEventListener: (t, f) => { (winListeners[t] ||= []).push(f); },
     dispatchEvent: (ev) => { for (const f of winListeners[ev.type] || []) f(ev); return true; },
+    // opts.narrow: the window is narrower than 720 (the sidebar is a drawer).
+    matchMedia: (q) => ({
+      matches: /max-width:\s*719px/.test(q) ? !!opts.narrow : /min-width:\s*1100px/.test(q) ? !opts.narrow : false,
+      addEventListener() {},
+    }),
     open: (...a) => { opened.push(a); return null; },
     focus: () => {},
   };
@@ -240,17 +272,28 @@ export function runBrowserPanel(html, opts = {}) {
   const ctx = vm.createContext({
     window, document, console, fetch, EventSource, MessageEvent, FileReader,
     FormData, Blob, atob, Buffer,
-    localStorage: {
+    // opts.localStorage: a storage of the test's own (one that throws).
+    localStorage: opts.localStorage || {
       getItem: (k) => (storage.has(k) ? storage.get(k) : null),
       setItem: (k, v) => { storage.set(k, String(v)); },
     },
     navigator: { clipboard: { writeText: async (t) => { copied.push(t); } } },
     setInterval: () => 1, clearInterval: () => {}, setTimeout: () => 1, clearTimeout: () => {},
+    // Extra browser globals a test needs (Notification).
+    ...(opts.globals || {}),
   });
   for (const s of scripts) vm.runInContext(s, ctx);
   const flush = () => new Promise((r) => setImmediate(r)).then(() => new Promise((r) => setImmediate(r)));
+  /** Evaluates an expression in the page: a pure helper of its script can be called by name. */
+  const run = (code) => vm.runInContext(code, ctx);
+  /** A key goes down: every keydown listener of the document, in a browser's order. */
+  const key = (ev) => {
+    const e = { key: '', code: '', target: body, preventDefault() { e.defaultPrevented = true; }, ...ev };
+    for (const f of docListeners.keydown || []) f(e);
+    return e;
+  };
   const es = () => sources[sources.length - 1];
   const emit = (obj) => es().emit(obj);
   const ins = () => requests.filter((r) => r.url === '/in').map((r) => JSON.parse(r.body));
-  return { byId, body, window, document, requests, opened, copied, sources, storage, emit, ins, flush, docListeners, winListeners };
+  return { byId, body, window, document, documentElement, requests, opened, copied, sources, storage, emit, ins, flush, run, key, docListeners, winListeners };
 }

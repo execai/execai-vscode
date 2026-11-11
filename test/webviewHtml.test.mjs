@@ -60,6 +60,21 @@ test('stop is hidden at rest and shown during a turn (CSS specificity)', () => {
     'a weak #stopBtn{display:none} selector is back — it loses to #bar button');
 });
 
+// A notice of several lines (sync names a file on one line and where its copy
+// is on the next) ran together into one paragraph: .notice had no pre-wrap,
+// unlike .error. A long path with no space must still wrap, not widen the log.
+test('notices and errors keep their line breaks and wrap long paths', () => {
+  const { chatHtml, browserHtml } = load();
+  for (const css of [chatHtml({}, {}), browserHtml(undefined, '')]) {
+    for (const cls of ['notice', 'error']) {
+      const rule = css.match(new RegExp('\\n\\s*\\.' + cls + ' \\{([^}]*)\\}'));
+      assert.ok(rule, `no .${cls} rule`);
+      assert.match(rule[1], /white-space: pre-wrap;/, `.${cls} drops line breaks`);
+      assert.match(rule[1], /overflow-wrap: anywhere;/, `.${cls} lets a long path widen the log`);
+    }
+  }
+});
+
 // Localization. The bug class this guards against: a UI string added later in
 // one language only. Same trap as in the TUI, where "late" hardcoded strings
 // slipped past i18n.

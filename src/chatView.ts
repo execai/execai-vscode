@@ -66,7 +66,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       },
       info: (message, ...actions) => vscode.window.showInformationMessage(message, ...actions),
       warn: (message) => { void vscode.window.showWarningMessage(message); },
-      reveal: () => this.view?.show?.(true),
+      reveal: () => this.reveal(),
+      // Looking at the panel: it is visible and the editor window has focus.
+      attentive: () => !!this.view && this.view.visible !== false && vscode.window.state?.focused !== false,
+      notificationsOn: () => vscode.workspace.getConfiguration('execai').get<boolean>('notifications', true),
+      // The window in the background and the agent on this machine (not over
+      // SSH, WSL or in a container — there it would pop up elsewhere).
+      systemNotify: () => !vscode.env.remoteName && vscode.window.state?.focused === false,
       openExternal: (url) => { void vscode.env.openExternal(vscode.Uri.parse(url)); },
       // The webview cannot rely on navigator.clipboard in every host — the
       // extension side always can.

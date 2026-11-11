@@ -2,8 +2,9 @@
 // extension host loads).
 //
 // --panel builds the browser page of `execai ui` instead:
-// dist/panel-browser.en.html and dist/panel-browser.ru.html — the chat panel
-// with browserHost.ts inlined. The agent embeds them (scripts/sync-panel.sh in
+// dist/panel-browser.en.html and dist/panel-browser.ru.html — the window of
+// `execai ui` (src/browserPage.ts) around the chat panel's script, with
+// browserHost.ts inlined. The agent embeds them (scripts/sync-panel.sh in
 // agent-vbai) and fills in {{NONCE}} and {{CONFIG}} when it serves the page.
 import esbuild from 'esbuild';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -48,7 +49,7 @@ async function buildPanel() {
   // The page builder, minified like the release: functions injected into the
   // page through toString() have to survive it.
   const page = await esbuild.build({
-    entryPoints: ['src/webviewHtml.ts'],
+    entryPoints: ['src/browserPage.ts'],
     bundle: true,
     platform: 'node',
     format: 'cjs',
@@ -58,7 +59,7 @@ async function buildPanel() {
   });
   const dir = mkdtempSync(join(tmpdir(), 'execai-panel-'));
   try {
-    const file = join(dir, 'webviewHtml.cjs');
+    const file = join(dir, 'browserPage.cjs');
     writeFileSync(file, page.outputFiles[0].text);
     const { browserHtml } = createRequire(import.meta.url)(file);
     mkdirSync('dist', { recursive: true });

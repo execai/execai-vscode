@@ -26,7 +26,9 @@ El agente [execai](https://github.com/execai/execai-agent) en la barra lateral d
 - **Código QR para el teléfono** — **Show the QR code** en el último paso y **QR for the phone** en la tarjeta: apunta la cámara del teléfono y el chat web se abre con esta máquina seleccionada. El código se dibuja en el propio panel, no se descarga nada
 - **Subagentes** — cuando el agente reparte trabajo entre subagentes, un bloque **Agents** sobre la entrada los muestra: estado, título, «step 12/50 · 38 left» (en amarillo cuando quedan 5 o menos), la última herramienta y el tiempo en marcha, con **+25** y **Stop** en los que siguen trabajando; el que llega a «hit the step limit» recibe **Continue (+25)** y sigue donde se quedó. Un clic en una fila abre lo que ha hecho hasta ahora en una pestaña de solo lectura; **Subagent steps** en el menú `>_` fija el límite para los subagentes nuevos (1–100, 50 por defecto)
 - **Tareas desde la web y el teléfono** — una tarea iniciada en el chat web o en el teléfono se abre aquí como un chat nuevo: su pestaña lleva 🌐, el primer mensaje dice «From the web: …», un aviso «A task came in from the web: …» trae **Open** y el turno se transmite en el panel; una pregunta de permiso se puede responder aquí o en el sitio, lo que ocurra antes. Hace falta iniciar sesión, un plan de ExecAI que incluya tareas desde la web (el panel lo indica y enlaza los planes) y la carpeta vinculada a un proyecto — **Project** en el menú `>_`. La barra de estado y el menú muestran quién acepta tareas en esta máquina, con **Accept here** cuando las tiene `execai serve` en segundo plano
-- **El mismo panel en un navegador** — el comando del agente `execai ui` abre este panel en una pestaña del navegador en 127.0.0.1, sin editor; por SSH, redirige el puerto y abre en tu equipo el enlace impreso. Guía: [docs/en/ui.md](https://github.com/execai/execai-agent/blob/main/docs/en/ui.md)
+- **El mismo chat en una ventana propia** — el comando del agente `execai ui` abre el chat sin editor: una ventana sin pestañas ni barra de direcciones (o una pestaña del navegador si no hay un navegador adecuado), con tres aspectos en tema claro y oscuro; por SSH, redirige el puerto y abre en tu equipo el enlace impreso. Guía: [docs/en/ui.md](https://github.com/execai/execai-agent/blob/main/docs/en/ui.md)
+- **Notificaciones** — cuando el chat en pantalla termina su turno o espera tu respuesta mientras el panel está oculto o la ventana del editor está en segundo plano, una notificación lo avisa y su botón **Open** trae el panel a ese chat; un turno que detuviste tú no se anuncia. Con la ventana del editor en segundo plano y un agente actualizado, es el propio agente quien muestra en su lugar una notificación de escritorio (en tu propio equipo; en una sesión remota se mantiene la del editor). En `execai ui`, el botón 🔔 de la cabecera de la página activa las notificaciones del navegador. En el editor las desactiva el ajuste `execai.notifications`
+- **Mensajes de la sincronización** — lo que dice la sincronización del agente (una copia guardada junto a un archivo, un archivo que queda fuera, una versión tomada del servidor) aparece en el chat como una línea de servicio, con sus saltos de línea; los comandos de sincronización se escriben en una terminal: `execai sync`. Guía: [docs/en/sync.md](https://github.com/execai/execai-agent/blob/main/docs/en/sync.md)
 
 Las fuentes (ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…), los modelos, la memoria y los permisos se configuran en la propia CLI: la extensión usa tu configuración actual. Una fuente también puede ser **tu propio endpoint**: cualquier dirección compatible con OpenAI o Anthropic (LM Studio, vLLM, LiteLLM, una pasarela corporativa). **Connect a source → Custom provider** en el menú `>_` pide nombre, tipo de interfaz, dirección y clave. Las listas de modelos vienen de los propios proveedores.
 
@@ -43,7 +45,7 @@ El panel y los comandos siguen el idioma de la interfaz del editor: hoy se inclu
 2. Abre una carpeta de proyecto: el icono de ExecAI aparecerá a la izquierda.
 3. En el primer arranque la extensión te ofrecerá **descargar el agente** (~7 MB). Se guarda
    en el almacenamiento de la extensión, sin sudo. Si execai ya está en el PATH y es
-   suficientemente reciente (R7.10+), se usa ese.
+   suficientemente reciente (R7.21+), se usa ese.
 
 Después inicia sesión y conecta modelos desde el propio panel: los pasos de **Getting started** tienen un botón para cada cosa, y el menú `>_` ofrece lo mismo («Sign in to ExecAI», «Connect a source»).
 
@@ -62,6 +64,7 @@ curl -fsSL https://raw.githubusercontent.com/execai/execai-agent/main/install.sh
 | `execai.attachContext` | `true` | Adjuntar el archivo activo y la selección al mensaje. |
 | `execai.autoInstall` | `true` | Ofrecer la descarga del agente cuando falta o está desactualizado. |
 | `execai.resumeLastChat` | `true` | Continuar el último chat del proyecto al abrir el panel; desactivado: empezar desde cero cada vez. |
+| `execai.notifications` | `true` | Avisar cuando un chat termina su turno o espera tu respuesta mientras el panel está oculto o la ventana del editor está en segundo plano: dentro del editor (su botón abre ese chat) o con una notificación de escritorio mientras la ventana está en segundo plano. |
 
 ## Cómo funciona
 

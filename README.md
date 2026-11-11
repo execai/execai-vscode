@@ -26,7 +26,9 @@ The [execai](https://github.com/execai/execai-agent) agent in your editor sideba
 - **QR code for the phone** — **Show the QR code** in the last step and **QR for the phone** on the card: point the phone camera at it and the web chat opens with this machine selected. The code is drawn right in the panel, nothing is fetched
 - **Subagents** — when the agent hands work to subagents, an **Agents** block above the input lists them: state, title, "step 12/50 · 38 left" (yellow with 5 or fewer left), the last tool and the time running, with **+25** and **Stop** on the ones still going; one that "hit the step limit" gets **Continue (+25)** and picks up where it stopped. A click on a row opens its work so far in a read-only tab; **Subagent steps** in the `>_` menu sets the limit for new subagents (1–100, 50 by default)
 - **Tasks from the web and the phone** — a task started in the web chat or on the phone opens here as a new chat: its tab carries 🌐, the first message reads "From the web: …", a toast "A task came in from the web: …" has **Open**, and the turn streams in the panel; a permission question can be answered here or on the site, whichever comes first. It takes signing in, an ExecAI plan that includes tasks from the web (the panel names it and links to the plans) and the folder bound to a project — **Project** in the `>_` menu. The status bar and the menu show who accepts tasks on this machine, with **Accept here** when the background `execai serve` holds them
-- **The same panel in a browser** — the agent's `execai ui` command opens this panel in a browser tab on 127.0.0.1, no editor needed; over SSH, forward the port and open the printed link on your side. Guide: [docs/en/ui.md](https://github.com/execai/execai-agent/blob/main/docs/en/ui.md)
+- **The same chat in a window of its own** — the agent's `execai ui` command opens the chat without an editor: a window with no tabs and no address bar (or a browser tab when there is no suitable browser), with three looks in light and dark themes; over SSH, forward the port and open the printed link on your side. Guide: [docs/en/ui.md](https://github.com/execai/execai-agent/blob/main/docs/en/ui.md)
+- **Notifications** — when the chat on screen finishes its turn or waits for your answer while the panel is hidden or the editor window is in the background, a notification says so, and its **Open** button brings the panel forward on that chat; a turn you stopped yourself is not announced. With the editor window in the background and an updated agent, the agent itself shows a desktop notification instead (on your own computer; in a remote session the in-editor one stays). In `execai ui` the 🔔 button in the page header turns on browser notifications. In the editor the `execai.notifications` setting turns them off
+- **Sync messages** — what the agent's sync says (a copy kept next to a file, a file left out, a version taken from the server) shows in the chat as a service line, with its line breaks; sync commands are typed in a terminal: `execai sync`. Guide: [docs/en/sync.md](https://github.com/execai/execai-agent/blob/main/docs/en/sync.md)
 
 Sources (ExecAI / Z.ai / Kimi / Anthropic / OpenAI / Ollama…), models, memory and permissions are all configured in the CLI itself — the extension uses your current configuration. A source can also be **your own endpoint** — any OpenAI- or Anthropic-compatible address (LM Studio, vLLM, LiteLLM, a corporate gateway): **Connect a source → Custom provider** in the `>_` menu asks for its name, interface type, address and key. Model lists come from the providers themselves.
 
@@ -43,7 +45,7 @@ The panel and the commands follow the editor's display language: **English** and
 2. Open a project folder — the ExecAI icon appears on the left.
 3. On first run the extension offers to **download the agent** (~7 MB). It lands in the
    extension's storage, no sudo involved. If execai is already in PATH and recent
-   enough (R7.10+), that one is used instead.
+   enough (R7.21+), that one is used instead.
 
 Then sign in and connect models right in the panel: the **Getting started** steps have a button for each, and the `>_` menu has the same ("Sign in to ExecAI", "Connect a source").
 
@@ -62,6 +64,7 @@ curl -fsSL https://raw.githubusercontent.com/execai/execai-agent/main/install.sh
 | `execai.attachContext` | `true` | Attach the active file and selection to the message. |
 | `execai.autoInstall` | `true` | Offer to download the agent when it is missing or outdated. |
 | `execai.resumeLastChat` | `true` | Continue the last chat of this project when the panel opens; off — start from a clean slate every time. |
+| `execai.notifications` | `true` | Notify when a chat finishes its turn or waits for your answer while the panel is hidden or the editor window is in the background: inside the editor (its button opens that chat), or with a desktop notification while the window is in the background. |
 
 ## How it works
 

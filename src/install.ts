@@ -34,15 +34,20 @@ export { versionAtLeast };
  * claude-cli source read-only; R6.88 hands attached images and screenshots
  * to claude-cli and codex-cli instead of a bare "[image]" placeholder;
  * R7.8 lets subagents run past five minutes, shows their steps left and
- * takes extend_agent; R7.9 answers machine_state — the machine card and the
+ * takes extend_agent; R7.10 answers machine_state — the machine card and the
  * getting-started steps (an older agent leaves both empty).
  * Pointing at an older CLI would mean a panel whose menu entries silently do
  * nothing and an error notice on every start.
  *
  * Raising this is also how a fix in the agent reaches the panel: an agent at
  * or above the minimum is used as is and never offered an update.
+ * R7.17 keeps project memory in .execai/ where sync carries it, runs web
+ * tasks only in this machine's folder and offers desktop notifications.
+ * R7.21 never erases a project's memory when its folder is empty or cloned
+ * again, decides sync file by file by content and sends sync's notices to
+ * the panel.
  */
-export const MIN_CLI = 'R7.10';
+export const MIN_CLI = 'R7.21';
 
 const MIRROR = 'https://storage.yandexcloud.net/execai-agent-prod/execai/stable';
 const GITHUB = 'https://github.com/execai/execai-agent/releases/latest/download';
