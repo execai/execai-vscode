@@ -130,6 +130,11 @@ const css = String.raw`
 .sk-beseda .h-path::before { content: "·"; margin-right: 6px; }
 .sk-beseda .hbtn { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--isl-edge); background: var(--panel); font-size: 13px; font-weight: 500; color: var(--dim); transition: border-color .12s, color .12s; }
 .sk-beseda .hbtn:hover { border-color: var(--edge); color: var(--fg); }
+/* the look: a pill like "History" beside it, and the switch of the theme as a pill of two */
+.sk-beseda .lookbtn { height: 34px; padding: 0 12px; border-radius: 999px; border-color: var(--isl-edge); background: var(--panel); font-size: 13px; font-weight: 500; transition: border-color .12s, color .12s; }
+.sk-beseda .lookbtn:hover, .sk-beseda .lookbtn[aria-expanded="true"] { border-color: var(--edge); background: var(--panel); }
+.sk-beseda .thseg { padding: 3px; }
+.sk-beseda .thseg button { min-width: 30px; height: 28px; }
 
 /* the feed — bubbles */
 .sk-beseda .feed { padding: 14px var(--padx) 22px; gap: 16px; font-size: 15.5px; line-height: 1.65; scroll-padding-block: 16px; }
@@ -442,7 +447,6 @@ const css = String.raw`
 .sk-beseda .pk:hover { background: var(--raised); }
 .sk-beseda .pk[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .sk-beseda .pk small { font-size: 12.5px; line-height: 1.35; }
-.sk-beseda .pk-sw { border-radius: 50%; }
 .sk-beseda .seg { padding: 4px; gap: 2px; border-radius: 999px; background: var(--raised); }
 .sk-beseda .seg button { height: 30px; padding: 0 8px; border-radius: 999px; color: var(--dim); font-size: 12.5px; font-weight: 500; }
 .sk-beseda .seg button:hover { color: var(--fg); }

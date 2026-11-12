@@ -11,7 +11,8 @@ question, subagents, changed files, sync notices, an error, attachments, the
 QR code for the phone, a lost connection, the keyboard focus, the sidebar put
 away, more tabs than fit, a list longer than the window, the key hints turned
 on (a skin decides whether to show them: the "hints" state shows what it would
-get from base alone)…
+get from base alone), the look panel under its button in the header, the
+first run…
 
 The matrix: 3 skins × 2 themes × the states below × 2 widths (1440 and 390),
 plus English for two states. Every shot is checked on the way: no horizontal
@@ -28,8 +29,14 @@ $PANEL_SHOTS_CHROME, or from playwright's own download):
     python scripts/panel-shots.py --out /tmp/shots --only work --system-theme
 
 By default a theme is the person's explicit choice and the system is set to
-the opposite one — the shot proves the choice wins. --system-theme leaves the
-theme to the system instead (nothing stored), as on a first run.
+the opposite one — the shot proves the choice wins. --system-theme stores "as
+the system" as the choice instead, and the system has the theme of the shot.
+
+The "first-run" state is the case with nothing stored at all, under a light
+system: the window has to come up in the default look and dark (that is
+checked before anything else is done), with the three looks on the empty
+screen. The other looks and the light theme of that state are reached by the
+tiles of that block, so every shot of it also proves that a pick there works.
 
 --only keeps the shots whose name contains every given word (comma separated).
 Names: <skin>-<theme>-<width>-<state>[-en].png. The exit code is 1 when a
@@ -56,6 +63,7 @@ SKINS = ["verstak", "beseda", "teletype"]
 THEMES = ["light", "dark"]
 # state → the widths it is shot at (None — every width asked for)
 STATES = {
+    "first-run": None,
     "empty": None,
     "work": None,
     "work-top": None,
@@ -67,6 +75,7 @@ STATES = {
     "notices": None,
     "signed-out": None,
     "look": None,
+    "look-acct": None,
     "dialog": None,
     "machine": None,
     "agent": None,
@@ -276,21 +285,24 @@ def state_event(signed=True):
 class Stand:
     """One page of the window with a fake agent behind it."""
 
-    def __init__(self, browser, html, lang, skin, theme, width, height, by_system=False):
+    def __init__(self, browser, html, lang, skin, theme, width, height, by_system=False, fresh=False):
         self.lang = lang
+        self.skin, self.theme = skin, theme
         self.t = texts(lang)
         self.errors = []
         self.posts = []
         # The system theme is the opposite one: the shot proves the explicit choice
-        # wins. by_system: nothing is stored, the system decides.
-        system = theme if by_system else ("dark" if theme == "light" else "light")
+        # wins. by_system: "as the system" is the choice stored, the system decides.
+        # fresh: nothing about the look is stored and the system is light — the
+        # window must come up dark all the same.
+        system = "light" if fresh else theme if by_system else ("dark" if theme == "light" else "light")
         self.ctx = browser.new_context(viewport={"width": width, "height": height}, color_scheme=system,
                                        device_scale_factor=1, reduced_motion="reduce", locale="ru-RU" if lang == "ru" else "en-US")
-        look = {"execai:ui:skin": skin,
-                # three chats are closed: the history has something in it
-                f"execai:{CWD}:execai.tabs": json.dumps(json.dumps({"hidden": ["c6", "c7", "c8"], "order": []}))}
-        if not by_system:
-            look["execai:ui:theme"] = theme
+        # three chats are closed: the history has something in it
+        look = {f"execai:{CWD}:execai.tabs": json.dumps(json.dumps({"hidden": ["c6", "c7", "c8"], "order": []}))}
+        if not fresh:
+            look["execai:ui:skin"] = skin
+            look["execai:ui:theme"] = "system" if by_system else theme
         self.ctx.add_init_script(INIT % json.dumps(look))
         self.page = self.ctx.new_page()
         self.page.on("console", lambda m: self.errors.append(m.text) if m.type == "error" else None)
@@ -433,7 +445,20 @@ def play(stand, state, width):
         stand.new_chat()
         return True
     stand.boot()
-    if state == "empty":
+    if state == "first-run":
+        # nothing has been picked: the window is dark and in the default look,
+        # and the empty chat shows the three looks. The other looks and the
+        # light theme are reached the way a person would — by the tiles of
+        # that block (it stays while they are tried).
+        stand.new_chat()
+        first = p.evaluate("() => [document.documentElement.className, document.documentElement.getAttribute('data-theme'), getComputedStyle(document.documentElement).colorScheme, !document.getElementById('lookIntro').hidden]")
+        if first != ["sk-verstak", "dark", "dark", True]:
+            raise RuntimeError(f"the first run is {first}, expected the workbench, dark, with the looks shown")
+        if stand.skin != "verstak":
+            p.click(f'#introLook [data-skin="{stand.skin}"]')
+        if stand.theme != "dark":
+            p.click(f'#introLook [data-theme-set="{stand.theme}"]')
+    elif state == "empty":
         stand.new_chat()
     elif state == "qr":
         # the phone step of "Getting started" with its code, and the machine card's own
@@ -562,6 +587,16 @@ def play(stand, state, width):
                 # is still the page's, and is drawn here the way any skin would get it
                 p.evaluate("() => document.getElementById('histBtn').click()")
         elif state == "look":
+            # the button in the header of the skin on screen; in a narrow window it
+            # opens the drawer, where the whole choice is
+            for at in ("tabs", "head", "top"):
+                if p.locator(f"#look-{at}").is_visible():
+                    p.click(f"#look-{at}")
+                    break
+            else:
+                raise RuntimeError("no look button in the header")
+        elif state == "look-acct":
+            # the second way in, beside the account: the same panel
             if width < 720:
                 p.click("#navBtn")
             p.click("#lookBtn")
@@ -587,7 +622,7 @@ def main():
     ap.add_argument("--only", default="", help="keep the shots whose name contains every word (comma separated)")
     ap.add_argument("--widths", default="1440,390", help="window widths (default: 1440,390)")
     ap.add_argument("--height", type=int, default=900)
-    ap.add_argument("--system-theme", action="store_true", help="leave the theme to the system instead of storing a choice")
+    ap.add_argument("--system-theme", action="store_true", help='store "as the system" as the theme and give the system the theme of the shot')
     args = ap.parse_args()
 
     out = pathlib.Path(args.out)
@@ -620,7 +655,7 @@ def main():
                             if any(w not in name for w in only):
                                 continue
                             height = 844 if width < 720 else args.height
-                            stand = Stand(browser, pages[lang], lang, skin, theme, width, height, args.system_theme)
+                            stand = Stand(browser, pages[lang], lang, skin, theme, width, height, args.system_theme, fresh=state == "first-run")
                             try:
                                 play(stand, state, width)
                                 stand.page.wait_for_timeout(120)
@@ -628,7 +663,7 @@ def main():
                                 audit = stand.page.evaluate(AUDIT)
                                 # the look on <html> is the one asked for, and it is the one painted
                                 got = stand.page.evaluate("() => [document.documentElement.className, document.documentElement.getAttribute('data-theme'), getComputedStyle(document.documentElement).colorScheme]")
-                                want = ["sk-" + skin, None if args.system_theme else theme, theme]
+                                want = ["sk-" + skin, None if args.system_theme and state != "first-run" else theme, theme]
                                 if got != want:
                                     audit["crash"] = f"the look is {got}, expected {want}"
                             except Exception as e:  # a state that could not be reached is a finding too

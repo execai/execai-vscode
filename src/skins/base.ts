@@ -147,6 +147,31 @@ body { margin: 0; overflow: hidden; background: var(--bg); color: var(--fg); fon
 .h-sub > span { flex: none; }
 .h-sub > .h-path { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .h-acts { display: flex; align-items: center; gap: 6px; flex: none; }
+
+/* ── the look, where it is seen: in the header of every skin, a button that
+   names the look on screen and, beside it, the switch of the theme. A header
+   shows as much of the two as it has room for: both captions of the switch,
+   then the caption of the theme that is on, then the icons alone; last of
+   all the name on the button goes. ── */
+.app > .top, .app > .tabs, .app > .head { container: hdr / inline-size; }
+.lookctl { display: inline-flex; align-items: center; gap: 6px; flex: none; min-width: 0; }
+.lookbtn { display: inline-flex; align-items: center; gap: 6px; flex: none; min-width: 0; height: 28px; padding: 0 9px; white-space: nowrap; border: 1px solid var(--line2); border-radius: 6px; color: var(--dim); }
+.app .lookbtn:hover, .app .lookbtn[aria-expanded="true"] { background: var(--hover); color: var(--fg); }
+.lookbtn > .ic { width: 15px; height: 15px; flex: none; }
+.lookbtn > .lb-k::after { content: ":"; }
+.lookbtn > .lb-v { font-weight: 600; color: var(--fg); }
+.lookbtn > .lb-c { width: 11px; height: 11px; color: var(--mute); }
+.thseg { flex: none; }
+.thseg button { flex: none; }
+@container hdr (max-width: 1399px) { .tabs .thseg button[aria-checked="false"] > span { display: none; } }
+@container hdr (max-width: 979px) { .tabs .thseg button > span { display: none; } }
+@container hdr (max-width: 759px) { .tabs .lookbtn > .lb-v { display: none; } .tabs .lookbtn > .lb-k::after { content: none; } }
+@container hdr (max-width: 899px) { .head .thseg button[aria-checked="false"] > span { display: none; } }
+@container hdr (max-width: 679px) { .head .thseg button > span, .head .js-hist > span { display: none; } }
+@container hdr (max-width: 559px) { .head .lookbtn > .lb-v { display: none; } .head .lookbtn > .lb-k::after { content: none; } }
+@container hdr (max-width: 1199px) { .top .thseg button[aria-checked="false"] > span { display: none; } }
+@container hdr (max-width: 1039px) { .top .thseg button > span { display: none; } }
+@container hdr (max-width: 999px) { .top .lookbtn > .lb-v { display: none; } .top .lookbtn > .lb-k::after { content: none; } }
 .hbtn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 
 /* ── the feed ── */
@@ -499,11 +524,33 @@ body.busy .st-turn .st-run { display: inline-flex; }
 #menu .head { display: flex; gap: 8px; align-items: center; min-width: 0; color: var(--mute); }
 #menu .head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #menu .head span:first-child:not(:last-child) { cursor: pointer; flex: none; }
-.pop { width: min(320px, calc(100vw - 16px)); }
+.pop { width: min(360px, calc(100vw - 16px)); }
 .pop-t { font-weight: 600; }
 .pop-skins { display: flex; flex-direction: column; }
-.pk { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 10px; align-items: center; width: 100%; min-width: 0; }
-.pk-sw { width: 14px; height: 14px; grid-row: 1 / 3; background: var(--accent-bg); }
+.pk { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 10px; align-items: center; width: 100%; min-width: 0; text-align: left; }
+/* A look in small: a window drawn with that look's own colours (the element
+   wears the look's class, see PREVIEW in tokens.ts) — its sidebar, its top
+   strip, two lines of text, its button. */
+.pk-pv { grid-row: 1 / 3; position: relative; display: block; flex: none; width: 76px; height: 50px; overflow: hidden; border: 1px solid var(--line2); border-radius: 5px; background: var(--bg); }
+.pk-pv > i { position: absolute; display: block; }
+.pk-pv > .pv-side { inset: 0 auto 0 0; width: 27%; background: var(--panel); border-right: 1px solid var(--line); }
+.pk-pv > .pv-top { left: 27%; right: 0; top: 0; height: 20%; background: var(--panel); border-bottom: 1px solid var(--line); }
+.pk-pv > .pv-l1 { left: 36%; top: 38%; width: 46%; height: 8%; border-radius: 2px; background: var(--fg); }
+.pk-pv > .pv-l2 { left: 36%; top: 56%; width: 30%; height: 8%; border-radius: 2px; background: var(--mute); }
+.pk-pv > .pv-btn { right: 8%; bottom: 10%; width: 20%; height: 16%; border-radius: 3px; background: var(--accent-bg); }
+.pk-pv.sk-beseda { border-radius: 9px; }
+.pk-pv.sk-beseda > .pv-side { inset: 10% auto 10% 5%; width: 24%; border: 0; border-radius: 5px; }
+.pk-pv.sk-beseda > .pv-top { display: none; }
+.pk-pv.sk-beseda > .pv-l1 { left: 54%; top: 16%; width: 38%; height: 20%; border-radius: 6px; background: var(--accent-soft); }
+.pk-pv.sk-beseda > .pv-l2 { left: 36%; top: 50%; width: 42%; background: var(--dim); }
+.pk-pv.sk-beseda > .pv-btn { width: 13%; height: 20%; border-radius: 999px; }
+.pk-pv.sk-teletype { border-radius: 0; }
+.pk-pv.sk-teletype::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 12%; background: var(--fg); }
+.pk-pv.sk-teletype > .pv-top { left: 0; height: 18%; background: var(--bg); border-bottom: 2px solid var(--line2); }
+.pk-pv.sk-teletype > .pv-side { top: 18%; bottom: 12%; }
+.pk-pv.sk-teletype > .pv-l1 { top: 30%; width: 34%; height: 13%; border-radius: 0; background: var(--accent-bg); }
+.pk-pv.sk-teletype > .pv-l2 { top: 51%; width: 46%; height: 6%; border-radius: 0; background: var(--fg); }
+.pk-pv.sk-teletype > .pv-btn { bottom: 20%; border-radius: 0; }
 .pk b { font-weight: 600; }
 .pk small { grid-column: 2; color: var(--mute); }
 .pk .ic { grid-column: 3; grid-row: 1 / 3; width: 14px; height: 14px; color: var(--accent); visibility: hidden; }
@@ -513,6 +560,32 @@ body.busy .st-turn .st-run { display: inline-flex; }
 .seg .ic { width: 14px; height: 14px; }
 .pop-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .pop-row > span { flex: 1; min-width: 0; color: var(--dim); }
+/* The same picker outside the panel. On the first empty screen (.in-feed) the
+   three tiles stand in a row, the theme and "keep this one" under them. At
+   the top of the drawer of a narrow window (.in-side) the tiles are small: the
+   picture and the name. */
+.lookbox { min-width: 0; }
+.lookbox .seg { margin-top: 8px; }
+.lookbox.in-feed .pop-skins, .lookbox.in-side .pop-skins { flex-direction: row; gap: 8px; }
+.lookbox.in-feed .pk, .lookbox.in-side .pk { flex: 1 1 0; align-content: start; }
+.lookbox.in-feed .pk-pv { grid-row: 1; width: 64px; height: 44px; }
+.lookbox.in-feed .pk .ic { grid-row: 1; }
+.lookbox.in-feed .pk small { grid-column: 1 / -1; margin-top: 6px; }
+.lookbox.in-feed .seg { max-width: 400px; }
+.lookbox.in-side .pk { position: relative; grid-template-columns: minmax(0, 1fr); padding: 6px; }
+.lookbox.in-side .pk-pv { grid-row: 1; width: 100%; height: auto; aspect-ratio: 3 / 2; margin-bottom: 6px; }
+.lookbox.in-side .pk b { grid-column: 1; grid-row: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: .94em; }
+.lookbox.in-side .pk .ic { position: absolute; top: 3px; right: 3px; padding: 2px; border-radius: 50%; background: var(--accent-bg); color: var(--accent-fg); }
+.lookbox.in-side .pk small { display: none; }
+.lookbox.in-side .seg .ic { display: none; }
+.side-look { display: none; min-width: 0; }
+.side-look > .lookbox { padding: 0 10px 8px; }
+.lookintro { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; min-width: 0; }
+.lookintro[hidden] { display: none; }
+.lookintro > * { grid-column: 1 / -1; min-width: 0; }
+.lookintro > .lookbox { grid-row: 3; }
+.lookintro > .li-done { grid-row: 3; grid-column: 2; align-self: end; justify-self: end; }
+.li-d { color: var(--dim); }
 #sheet { display: none; position: fixed; inset: 0; z-index: 35; padding: 12px; justify-content: flex-end; align-items: flex-start; background: rgba(0, 0, 0, .42); }
 #sheet.open { display: flex; }
 #sheet .info { width: min(420px, 100%); max-height: 100%; overflow-y: auto; }
@@ -569,5 +642,11 @@ export const BASE_LAST_CSS = String.raw`
   #sheet .info { width: 100%; }
   #toasts { top: 8px; right: 8px; width: calc(100vw - 16px); }
   .notice.wake > span { flex-basis: 100%; }
+  /* the look: one button in the header; the whole choice at the top of the drawer */
+  .app .top .thseg, .app .top .lookbtn > .lb-v, .app .top .lookbtn > .lb-c { display: none; }
+  .app .top .lookbtn > .lb-k::after { content: none; }
+  .app .side-look { display: block; }
+  .lookbox.in-feed .pop-skins { flex-direction: column; }
+  .lookintro > .li-done { grid-row: 4; grid-column: 1 / -1; justify-self: start; }
 }
 `;

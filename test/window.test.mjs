@@ -119,11 +119,11 @@ const pick = (p, attr, value) => {
   b.onclick();
 };
 
-test('three skins; the workbench and the system theme by default', async () => {
+test('three skins; the workbench and the dark theme by default', async () => {
   assert.deepEqual(SKIN_IDS, ['verstak', 'beseda', 'teletype']);
   assert.equal(BOTH.DEFAULT_SKIN, 'verstak');
   const p = await started();
-  assert.deepEqual(look(p), { skin: 'sk-verstak', theme: null }, 'no data-theme: the system decides');
+  assert.deepEqual(look(p), { skin: 'sk-verstak', theme: 'dark' }, 'dark until the person picks a theme, whatever the system says');
   // The picker shows all three, the current one checked.
   p.byId('lookBtn').onclick();
   const pop = p.byId('pop');
@@ -131,29 +131,34 @@ test('three skins; the workbench and the system theme by default', async () => {
   assert.deepEqual(pop.querySelectorAll('[data-skin]').map((b) => [b.getAttribute('data-skin'), b.getAttribute('aria-checked')]),
     [['verstak', 'true'], ['beseda', 'false'], ['teletype', 'false']]);
   assert.deepEqual(pop.querySelectorAll('[data-theme-set]').map((b) => [b.getAttribute('data-theme-set'), b.getAttribute('aria-checked')]),
-    [['system', 'true'], ['light', 'false'], ['dark', 'false']]);
+    [['system', 'false'], ['light', 'false'], ['dark', 'true']]);
 });
 
 test('the choice is applied at once, stored, and comes back on a reload', async () => {
   const p = await started();
   pick(p, 'data-skin', 'beseda');
-  assert.deepEqual(look(p), { skin: 'sk-beseda', theme: null });
-  assert.equal(p.storage.get('execai:ui:skin'), 'beseda');
-  assert.equal(p.byId('pop').querySelector('[data-skin="beseda"]').getAttribute('aria-checked'), 'true');
-  pick(p, 'data-theme-set', 'dark');
   assert.deepEqual(look(p), { skin: 'sk-beseda', theme: 'dark' });
-  assert.equal(p.storage.get('execai:ui:theme'), 'dark');
+  assert.equal(p.storage.get('execai:ui:skin'), 'beseda');
+  assert.equal(p.storage.has('execai:ui:theme'), false, 'a look was picked, not a theme');
+  assert.equal(p.byId('pop').querySelector('[data-skin="beseda"]').getAttribute('aria-checked'), 'true');
+  // A reload with a look and no theme stored: still dark.
+  assert.deepEqual(look(runBrowserPanel(page(), { storage: p.storage })), { skin: 'sk-beseda', theme: 'dark' });
+  pick(p, 'data-theme-set', 'light');
+  assert.deepEqual(look(p), { skin: 'sk-beseda', theme: 'light' });
+  assert.equal(p.storage.get('execai:ui:theme'), 'light');
 
   // A reload: the stored look is on <html> before the page draws anything.
   const q = runBrowserPanel(page(), { storage: p.storage });
-  assert.deepEqual(look(q), { skin: 'sk-beseda', theme: 'dark' });
+  assert.deepEqual(look(q), { skin: 'sk-beseda', theme: 'light' }, 'an explicit light theme, whatever the system says');
   await q.flush();
-  pick(q, 'data-theme-set', 'light');
-  assert.equal(look(q).theme, 'light', 'an explicit light theme, whatever the system says');
-  // Back to the system: the attribute goes, so the media query decides.
+  pick(q, 'data-theme-set', 'dark');
+  assert.equal(look(q).theme, 'dark');
+  // "As the system" is a pick too: the attribute goes, the media query decides — and it is kept as that.
   pick(q, 'data-theme-set', 'system');
   assert.deepEqual(look(q), { skin: 'sk-beseda', theme: null });
   assert.equal(q.storage.get('execai:ui:theme'), 'system');
+  const r = runBrowserPanel(page(), { storage: q.storage });
+  assert.deepEqual(look(r), { skin: 'sk-beseda', theme: null }, 'who chose the system keeps it: no dark by default for them');
   pick(q, 'data-skin', 'teletype');
   assert.deepEqual(look(runBrowserPanel(page(), { storage: q.storage })), { skin: 'sk-teletype', theme: null });
 });
@@ -171,7 +176,8 @@ test('the look is set in <head>, before the stylesheet and the body', () => {
 test('a stored value the page does not know is ignored', async () => {
   const storage = new Map([['execai:ui:skin', 'nope'], ['execai:ui:theme', 'purple']]);
   const p = runBrowserPanel(page(), { storage });
-  assert.deepEqual(look(p), { skin: 'sk-verstak', theme: null });
+  assert.deepEqual(look(p), { skin: 'sk-verstak', theme: 'dark' });
+  assert.equal(p.run('LOOK.fresh'), true, 'nothing the page knows was picked');
 });
 
 test('without storage the page works: the default look, and a choice lasts until a reload', async () => {
@@ -180,11 +186,13 @@ test('without storage the page works: the default look, and a choice lasts until
     setItem: () => { throw new Error('storage is disabled'); },
   };
   const p = await started({ localStorage: broken });
-  assert.deepEqual(look(p), { skin: 'sk-verstak', theme: null });
+  assert.deepEqual(look(p), { skin: 'sk-verstak', theme: 'dark' });
   assert.ok(p.byId('log').querySelectorAll('.notice').some((n) => n.textContent.includes('glm')), 'the page drew ready');
   pick(p, 'data-skin', 'teletype');
-  pick(p, 'data-theme-set', 'dark');
-  assert.deepEqual(look(p), { skin: 'sk-teletype', theme: 'dark' });
+  pick(p, 'data-theme-set', 'light');
+  assert.deepEqual(look(p), { skin: 'sk-teletype', theme: 'light' });
+  p.byId('introDone').onclick();
+  assert.ok(p.byId('lookIntro').hidden, 'kept as it is, storage or not');
   // And the chat itself is alive.
   p.emit({ type: 'chat_loaded', chat: 'c1', msgs: [] });
   p.byId('inp').value = 'hello';
@@ -1280,5 +1288,199 @@ test('the cross of a tab takes a click only where it can be seen', () => {
   for (const id of SKIN_IDS) {
     const own = html.indexOf(`.sk-${id} .`);
     assert.ok(rule > 0 && own > rule, `in the shared rules, before the rules of ${id}`);
+  }
+});
+
+// ── the look is in plain sight ──────────────────────────────────
+
+test('the header of every skin names the look and switches the theme', async () => {
+  const html = page('en');
+  // One control per header a skin may have; each a labelled button and a two-position switch.
+  for (const [at, open, close] of [['top', '<header class="top">', '</header>'], ['tabs', '<nav class="tabs"', '</nav>'], ['head', '<div class="h-acts">', '</div>\n  </div>']]) {
+    const part = html.slice(html.indexOf(open), html.indexOf(close, html.indexOf(open)));
+    assert.ok(part.includes(`id="look-${at}"`) && part.includes(`id="thL-${at}"`) && part.includes(`id="thD-${at}"`), `no look control in ${at}`);
+    assert.match(part, new RegExp(`id="look-${at}"[^>]*aria-haspopup="dialog"[^>]*>.*<span class="lb-k">Look</span><b class="lb-v" id="lookName-${at}">`), 'an icon and words, not an icon alone');
+  }
+  const p = await started();
+  for (const at of ['top', 'tabs', 'head']) {
+    assert.equal(p.byId('lookName-' + at).textContent, 'Workbench');
+    assert.deepEqual([p.byId('thL-' + at).getAttribute('aria-checked'), p.byId('thD-' + at).getAttribute('aria-checked')], ['false', 'true']);
+  }
+  // The switch: one click, applied and stored.
+  p.byId('thL-tabs').onclick();
+  assert.deepEqual(look(p), { skin: 'sk-verstak', theme: 'light' });
+  assert.equal(p.storage.get('execai:ui:theme'), 'light');
+  for (const at of ['top', 'tabs', 'head']) assert.equal(p.byId('thL-' + at).getAttribute('aria-checked'), 'true', at);
+  p.byId('thD-head').onclick();
+  assert.equal(look(p).theme, 'dark');
+  // The button opens the panel; the name on every button follows the pick.
+  const pop = p.byId('pop');
+  p.byId('look-tabs').onclick();
+  assert.ok(pop.classList.contains('open'));
+  assert.equal(p.byId('look-tabs').getAttribute('aria-expanded'), 'true');
+  assert.equal(p.byId('look-head').getAttribute('aria-expanded'), 'false');
+  pop.querySelector('[data-skin="teletype"]').onclick();
+  assert.deepEqual(look(p), { skin: 'sk-teletype', theme: 'dark' });
+  for (const at of ['top', 'tabs', 'head']) assert.equal(p.byId('lookName-' + at).textContent, 'Teletype');
+  assert.ok(pop.classList.contains('open'), 'the panel stays: another look is one more click');
+  assert.equal(pop.querySelector('[data-skin="teletype"]').getAttribute('aria-checked'), 'true');
+  // "As the system" in the panel: the switch shows the theme on screen (the test system is light).
+  pop.querySelector('[data-theme-set="system"]').onclick();
+  assert.equal(look(p).theme, null);
+  assert.deepEqual([p.byId('thL-top').getAttribute('aria-checked'), p.byId('thD-top').getAttribute('aria-checked')], ['true', 'false']);
+  // The same button closes it.
+  p.byId('look-tabs').onclick();
+  assert.ok(!pop.classList.contains('open'));
+  assert.equal(p.byId('look-tabs').getAttribute('aria-expanded'), 'false');
+});
+
+test('the look panel: tiles with a picture of each look, one panel for every way in, Esc gives the focus back', async () => {
+  const p = await started();
+  p.emit({ type: 'state', model: 'glm', source: 'execai', user: 'dev@example.com', models: [], sources: [], efforts: [], securities: [] });
+  const pop = p.byId('pop');
+  const tiles = () => pop.querySelectorAll('.pk').map((b) => ({
+    skin: b.getAttribute('data-skin'), role: b.getAttribute('role'), name: b.querySelector('b').textContent,
+    about: b.querySelector('small').textContent, picture: b.querySelector('.pk-pv').className, on: b.getAttribute('aria-checked'),
+  }));
+  let focused = '';
+  for (const id of ['look-head', 'lookBtn']) p.byId(id).focus = () => { focused = id; };
+  p.byId('look-head').onclick();
+  const fromHeader = tiles();
+  assert.deepEqual(fromHeader, [
+    { skin: 'verstak', role: 'radio', name: 'Workbench', about: 'Dense and calm, like an editor', picture: 'pk-pv sk-verstak', on: 'true' },
+    { skin: 'beseda', role: 'radio', name: 'Conversation', about: 'Soft and roomy, the chat in the middle', picture: 'pk-pv sk-beseda', on: 'false' },
+    { skin: 'teletype', role: 'radio', name: 'Teletype', about: 'Monospaced, with a yellow marker', picture: 'pk-pv sk-teletype', on: 'false' },
+  ]);
+  assert.equal(pop.querySelectorAll('.pk-pv')[0].getAttribute('aria-hidden'), 'true', 'the picture is decoration: the name says it');
+  assert.equal(pop.querySelectorAll('[data-theme-set]').length, 3);
+  // Esc: closed, and the focus is back on the button that opened it.
+  p.key({ key: 'Escape' });
+  assert.ok(!pop.classList.contains('open'));
+  assert.equal(focused, 'look-head');
+  // The small button beside the account opens the very same panel.
+  p.byId('lookBtn').onclick();
+  assert.ok(pop.classList.contains('open'));
+  assert.deepEqual(tiles(), fromHeader);
+  assert.ok(pop.querySelectorAll('.pop-row').some((r) => r.textContent.includes('dev@example.com')), 'with the account in it, as before');
+  assert.equal(p.byId('lookBtn').getAttribute('aria-expanded'), 'true');
+  // Another way in while it is open: it moves to that button instead of closing.
+  p.byId('look-head').onclick();
+  assert.ok(pop.classList.contains('open'));
+  assert.deepEqual([p.byId('lookBtn').getAttribute('aria-expanded'), p.byId('look-head').getAttribute('aria-expanded')], ['false', 'true']);
+  p.key({ key: 'Escape' });
+  assert.equal(focused, 'look-head');
+});
+
+test('the first run: dark, and the three looks on the empty screen until one is picked or kept', async () => {
+  const p = await started();
+  p.emit({ type: 'chat_reset', chat: 'c1' });
+  const intro = p.byId('lookIntro'), box = p.byId('introLook');
+  assert.equal(p.run('LOOK.fresh'), true);
+  assert.equal(intro.hidden, false, 'nothing picked yet: the looks are shown');
+  assert.deepEqual(box.querySelectorAll('[data-skin]').map((b) => [b.getAttribute('data-skin'), b.getAttribute('aria-checked')]),
+    [['verstak', 'true'], ['beseda', 'false'], ['teletype', 'false']]);
+  assert.deepEqual(box.querySelectorAll('[data-theme-set]').map((b) => [b.getAttribute('data-theme-set'), b.getAttribute('aria-checked')]),
+    [['system', 'false'], ['light', 'false'], ['dark', 'true']]);
+  // A pick there is a pick: applied, stored, marked in every picker — and the block stays for the next try.
+  box.querySelector('[data-skin="beseda"]').onclick();
+  assert.deepEqual(look(p), { skin: 'sk-beseda', theme: 'dark' });
+  assert.equal(p.storage.get('execai:ui:skin'), 'beseda');
+  assert.equal(intro.hidden, false);
+  assert.equal(box.querySelector('[data-skin="beseda"]').getAttribute('aria-checked'), 'true');
+  assert.equal(p.byId('sideLook').querySelector('[data-skin="beseda"]').getAttribute('aria-checked'), 'true');
+  assert.equal(p.byId('lookName-head').textContent, 'Conversation');
+  box.querySelector('[data-theme-set="light"]').onclick();
+  assert.deepEqual(look(p), { skin: 'sk-beseda', theme: 'light' });
+  assert.equal(intro.hidden, false, 'still there: the third look is one more click away');
+  // The chat is left with a pick made: the block has done its part, also for the next empty chat of this load.
+  p.byId('inp').value = 'hello';
+  p.byId('sendBtn').onclick();
+  await p.flush();
+  assert.equal(intro.hidden, true);
+  p.byId('newTab').onclick();
+  await p.flush();
+  assert.equal(intro.hidden, true);
+  // Without a pick the block waits: a message alone is not a choice of a look.
+  const w = await started();
+  w.emit({ type: 'chat_reset', chat: 'c1' });
+  w.byId('inp').value = 'hello';
+  w.byId('sendBtn').onclick();
+  await w.flush();
+  assert.equal(w.byId('lookIntro').hidden, false);
+  // The next load: a choice is stored, the block is not there.
+  const q = await started({ storage: p.storage });
+  q.emit({ type: 'chat_reset', chat: 'c1' });
+  assert.equal(q.run('LOOK.fresh'), false);
+  assert.equal(q.byId('lookIntro').hidden, true);
+  assert.deepEqual(look(q), { skin: 'sk-beseda', theme: 'light' });
+
+  // "Keep this one" without touching anything: the defaults become the choice.
+  const k = await started();
+  k.byId('introDone').onclick();
+  assert.equal(k.byId('lookIntro').hidden, true);
+  assert.deepEqual([k.storage.get('execai:ui:skin'), k.storage.get('execai:ui:theme')], ['verstak', 'dark']);
+  assert.equal((await started({ storage: k.storage })).byId('lookIntro').hidden, true);
+  // A theme picked with the switch in the header counts as well.
+  const h = await started();
+  h.byId('thL-top').onclick();
+  assert.equal((await started({ storage: h.storage })).byId('lookIntro').hidden, true);
+  // Who had picked "as the system" before this build keeps it, and is not asked again.
+  const old = await started({ storage: new Map([['execai:ui:theme', 'system']]) });
+  assert.deepEqual(look(old), { skin: 'sk-verstak', theme: null });
+  assert.equal(old.byId('lookIntro').hidden, true);
+  // The block is part of the greeting; both languages have its words.
+  for (const [lang, word] of [['en', 'Keep this one'], ['ru', 'Оставить так']]) {
+    const html = page(lang);
+    const greet = html.slice(html.indexOf('id="welcome"'));
+    assert.ok(greet.includes('id="lookIntro" hidden') && greet.includes('id="introLook"') && greet.includes(word), lang);
+  }
+});
+
+test('a narrow window: one button in the header, the whole choice at the top of the drawer', async () => {
+  const p = await started({ narrow: true });
+  const side = p.byId('sideLook');
+  assert.equal(side.querySelectorAll('[data-skin]').length, 3);
+  assert.equal(side.querySelectorAll('[data-theme-set]').length, 3);
+  p.byId('look-top').onclick();
+  assert.ok(p.byId('app').classList.contains('side-open'), 'the button opens the drawer');
+  assert.ok(!p.byId('pop').classList.contains('open'), 'not a second panel over it');
+  side.querySelector('[data-skin="teletype"]').onclick();
+  side.querySelector('[data-theme-set="light"]').onclick();
+  assert.deepEqual(look(p), { skin: 'sk-teletype', theme: 'light' });
+  assert.equal(side.querySelector('[data-skin="teletype"]').getAttribute('aria-checked'), 'true');
+  const html = page('en');
+  // In the markup the choice is the first thing of the drawer after "New chat"; the stylesheet shows it only when narrow.
+  const aside = html.slice(html.indexOf('<aside class="side"'), html.indexOf('</aside>'));
+  assert.ok(aside.indexOf('id="sideLook"') > 0 && aside.indexOf('id="sideLook"') < aside.indexOf('id="sideChats"'));
+  assert.match(html, /\.side-look \{ display: none;/);
+  const narrow = html.slice(html.lastIndexOf('@media (max-width: 719px)'));
+  assert.match(narrow, /\.app \.side-look \{ display: block; \}/);
+  assert.match(narrow, /\.app \.top \.thseg, \.app \.top \.lookbtn > \.lb-v, \.app \.top \.lookbtn > \.lb-c \{ display: none; \}/);
+});
+
+test('a picture of a look wears that look in the theme on screen', () => {
+  const sheet = css();
+  for (const s of BOTH.SKINS) {
+    // Light by the look's own rule; dark by choice and by the system — also inside a window that wears another look.
+    assert.ok(sheet.includes(`:root[data-theme="dark"] .pk-pv.${s.cls} { --bg: ${s.palette.bg[1]};`), s.id);
+    assert.ok(sheet.includes(`@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pk-pv.${s.cls} { --bg: ${s.palette.bg[1]};`), s.id);
+    assert.match(sheet, new RegExp(`\\.pk-pv(\\.${s.cls})? > \\.pv-btn \\{[^}]*`));
+  }
+  // The picture is drawn with tokens only (the literal-colour test covers base.ts as well).
+  assert.match(sheet, /\.pk-pv \{[^}]*background: var\(--bg\);/);
+  assert.match(sheet, /\.pk-pv > \.pv-btn \{[^}]*background: var\(--accent-bg\);/);
+  // A header shows as much of the control as it has room for.
+  assert.match(sheet, /\.app > \.top, \.app > \.tabs, \.app > \.head \{ container: hdr \/ inline-size; \}/);
+  assert.match(sheet, /@container hdr \(max-width: \d+px\) \{ \.tabs \.thseg button > span \{ display: none; \} \}/);
+});
+
+test('every skin dresses the look button and the theme switch its own way, and its previews stay out of its rules', () => {
+  for (const s of BOTH.SKINS) {
+    const own = s.css.replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.match(own, new RegExp(`\\.${s.cls} \\.lookbtn \\{[^}]*height: \\d+px;`), `${s.id}: the button has its height`);
+    assert.match(own, new RegExp(`\\.${s.cls} \\.thseg button \\{[^}]*min-width: \\d+px;`), `${s.id}: a position of the switch is wide enough to hit`);
+    // A picture of a look is drawn by base.ts alone: a skin has no rule that could reach inside one.
+    assert.ok(!/\.pk-pv|\.pv-/.test(own), `${s.id} styles the pictures of looks`);
+    assert.ok(!/\.pk-sw/.test(own), `${s.id} still styles the swatch that is gone`);
   }
 });

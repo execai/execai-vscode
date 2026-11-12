@@ -1,10 +1,15 @@
 // Colour tokens of the `execai ui` window.
 //
 // A skin names its colours once, as [light, dark] pairs; everything it draws
-// refers to them by token (var(--bg), var(--accent)…), never by value. The
-// theme is "as the system" unless the person picked one: then <html> carries
-// data-theme="light" | "dark" (set before the first paint, see headScript in
-// window/markup.ts), and the explicit choice wins over the system setting.
+// refers to them by token (var(--bg), var(--accent)…), never by value. <html>
+// carries data-theme="light" | "dark" (set before the first paint, see
+// headScript in window/markup.ts): dark until the person picks a theme, then
+// what was picked. "As the system" is a choice too: the attribute is absent
+// and the system setting decides.
+//
+// PREVIEW is the class of a small picture of a skin (the look picker): an
+// element with it and a skin's class has that skin's tokens, in the theme the
+// window is in — whatever skin the window itself wears.
 
 /** A skin's colours: token → [light, dark]. */
 export type Palette = Record<string, [string, string]>;
@@ -31,6 +36,8 @@ export const TOKENS = [
   'focus', 'shadow',
 ] as const;
 
+export const PREVIEW = 'pk-pv';
+
 /** The token rules of the given skins: light, dark by the system, dark by choice. */
 export function tokensCss(skins: Skin[]): string {
   const block = (p: Palette, i: 0 | 1) => TOKENS.map((k) => `--${k}: ${p[k][i]};`).join(' ');
@@ -43,6 +50,8 @@ export function tokensCss(skins: Skin[]): string {
     out.push(`.${s.cls} { ${block(s.palette, 0)} }`);
     out.push(`@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]).${s.cls} { ${block(s.palette, 1)} } }`);
     out.push(`:root[data-theme="dark"].${s.cls} { ${block(s.palette, 1)} }`);
+    out.push(`@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .${PREVIEW}.${s.cls} { ${block(s.palette, 1)} } }`);
+    out.push(`:root[data-theme="dark"] .${PREVIEW}.${s.cls} { ${block(s.palette, 1)} }`);
   }
   return out.join('\n');
 }

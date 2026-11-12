@@ -3,6 +3,18 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.41 — 2026-11-12
+
+### Changed
+
+- **The `execai ui` window, built from this repository and shipped with the
+  agent 7.23, is dark by default and keeps the look in plain sight.** A
+  labelled "Look" button and a light / dark switch sit in the header of the
+  window in all three looks (Workbench, Conversation, Teletype), and the
+  first start shows the looks right on the empty chat. The panel inside an
+  editor is unchanged.
+- The README shows the window in motion.
+
 ## 0.2.40 — 2026-11-12
 
 ### Added

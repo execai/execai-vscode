@@ -19,7 +19,7 @@
 export const WINDOW_JS = String.raw`
 // ══════════ the window of execai ui ══════════
 const CFG = (window.execaiPage && window.execaiPage.config) || {};
-const LOOK = window.execaiLook || { skin: 'verstak', theme: 'system', skins: ['verstak'] };
+const LOOK = window.execaiLook || { skin: 'verstak', theme: 'dark', skins: ['verstak'], fresh: false };
 const LANG = (document.documentElement && document.documentElement.lang) || 'en';
 const $id = (id) => document.getElementById(id);
 const appEl = $id('app'), railEl = $id('rail'), infoEl = $id('info'), sheetEl = $id('sheet');
@@ -123,9 +123,36 @@ function winIsEmpty() {
 }
 
 // ── the look: a skin and a theme, remembered in this browser ──
+// The theme is dark until the person picks one (see headScript); "as the
+// system" is a pick like light and dark.
 const winLook = { skin: LOOK.skin, theme: LOOK.theme };
+// Nothing has been picked yet: an empty chat shows the three looks. The
+// block does not vanish under the hand that is trying the looks out: it
+// stays while that empty chat is on screen, and is over once a pick has been
+// made and the chat is left (a message sent, another chat opened) — or at
+// once, with its own button.
+let winIntro = !!LOOK.fresh;
+let winPicked = false;   // a look or a theme was picked during this load
+function winIntroOver() {
+  winIntro = false;
+  introEl.hidden = true;
+}
+// The headers a skin may have; each carries the look button and the theme switch.
+const WIN_HEADERS = ['top', 'tabs', 'head'];
+const introEl = $id('lookIntro'), introBox = $id('introLook'), sideLook = $id('sideLook');
 function winStore(k, v) {
   try { localStorage.setItem('execai:ui:' + k, v); } catch (e) { /* no storage: the choice lasts until a reload */ }
+}
+function winSkinName(s) {
+  if (s === 'verstak') return [T.winSkinVerstak, T.winSkinVerstakD];
+  if (s === 'beseda') return [T.winSkinBeseda, T.winSkinBesedaD];
+  if (s === 'teletype') return [T.winSkinTeletype, T.winSkinTeletypeD];
+  return [s, ''];
+}
+// The theme on screen: the one picked, or the system's when it is left to it.
+function winThemeNow() {
+  if (winLook.theme !== 'system') return winLook.theme;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 function winApplyLook() {
   const d = document.documentElement;
@@ -133,21 +160,35 @@ function winApplyLook() {
   d.className = 'sk-' + winLook.skin;
   if (winLook.theme === 'system') d.removeAttribute('data-theme');
   else d.setAttribute('data-theme', winLook.theme);
+  winFrame();
+}
+// The frame a browser draws around an installed page takes the colour of the page.
+function winFrame() {
+  if (!document.querySelectorAll || !window.getComputedStyle || !document.body) return;
+  let bg = '';
+  try { bg = window.getComputedStyle(document.body).backgroundColor; } catch (e) { return; }
+  if (!bg) return;
+  for (const m of document.querySelectorAll('meta[name="theme-color"]')) {
+    m.removeAttribute('media');
+    m.setAttribute('content', bg);
+  }
 }
 function winSetSkin(s) {
   if (LOOK.skins.indexOf(s) < 0) return;
   winLook.skin = s;
+  winPicked = true;
   winApplyLook();
   winStore('skin', s);
-  winRenderPop();
+  winLookDraw();
   winRelayout();
 }
 function winSetTheme(t) {
   if (t !== 'system' && t !== 'light' && t !== 'dark') return;
   winLook.theme = t;
+  winPicked = true;
   winApplyLook();
   winStore('theme', t);
-  winRenderPop();
+  winLookDraw();
 }
 // A skin moves everything: what floats is put back in place, the feed keeps its end.
 function winRelayout() {
@@ -155,39 +196,50 @@ function winRelayout() {
   winSideApply();
   winSync();
   winTabsMore();
-  if (popEl.classList.contains('open')) winPlace(popEl, $id('lookBtn'));
+  if (popEl.classList.contains('open')) {
+    // The button the panel hangs on may belong to a header this skin does not have.
+    const seen = winLookBtnSeen();
+    if (seen && seen !== winPopFrom) {
+      winPopFrom = seen;
+      for (const b of winLookBtns()) b.setAttribute('aria-expanded', b === seen ? 'true' : 'false');
+    }
+    winPlace(popEl, winPopFrom || $id('lookBtn'));
+  }
   if (winPinned && !winEmpty) winStick();
 }
 function winNotifyState() {
   if (typeof Notification === 'undefined') return '';
   return Notification.permission || 'default';
 }
-function winRenderPop() {
-  popEl.innerHTML = '';
+// The picker: the three looks as tiles — a small picture drawn with the
+// look's own colours, its name, a line about it — then the theme. The same
+// in the panel under the header button, on the first empty screen and at the
+// top of the drawer of a narrow window; a pick anywhere marks all of them.
+function winLookBox(host, labelClass) {
   const radio = (b, on) => { b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', on ? 'true' : 'false'); };
-  popEl.appendChild(el('div', 'pop-t', T.winSkin));
-  const names = {
-    verstak: [T.winSkinVerstak, T.winSkinVerstakD],
-    beseda: [T.winSkinBeseda, T.winSkinBesedaD],
-    teletype: [T.winSkinTeletype, T.winSkinTeletypeD],
-  };
   const skins = el('div', 'pop-skins');
   skins.setAttribute('role', 'radiogroup');
   skins.setAttribute('aria-label', T.winSkin);
   for (const s of LOOK.skins) {
+    const name = winSkinName(s);
     const b = el('button', 'pk');
     radio(b, s === winLook.skin);
     b.setAttribute('data-skin', s);
-    // The swatch wears the skin's own class: its colour is that skin's token.
-    b.appendChild(el('span', 'pk-sw sk-' + s));
-    b.appendChild(el('b', '', (names[s] || [s])[0]));
+    b.title = name[1];
+    // The picture wears the look's own class: its colours are that look's tokens.
+    const pv = el('span', 'pk-pv sk-' + s);
+    pv.setAttribute('aria-hidden', 'true');
+    for (const part of ['pv-side', 'pv-top', 'pv-l1', 'pv-l2', 'pv-btn']) pv.appendChild(el('i', part));
+    b.appendChild(pv);
+    b.appendChild(el('b', '', name[0]));
     b.appendChild(ic('check'));
-    b.appendChild(el('small', '', (names[s] || ['', ''])[1]));
+    b.appendChild(el('small', '', name[1]));
     b.onclick = () => winSetSkin(s);
     skins.appendChild(b);
   }
-  popEl.appendChild(skins);
-  popEl.appendChild(el('div', 'pop-t', T.winTheme));
+  host.appendChild(skins);
+  // In the panel the theme has its heading; elsewhere the three words say it.
+  if (labelClass) host.appendChild(el('div', labelClass, T.winTheme));
   const seg = el('div', 'seg');
   seg.setAttribute('role', 'radiogroup');
   seg.setAttribute('aria-label', T.winTheme);
@@ -201,7 +253,27 @@ function winRenderPop() {
     b.onclick = () => winSetTheme(p[0]);
     seg.appendChild(b);
   }
-  popEl.appendChild(seg);
+  host.appendChild(seg);
+}
+// What is picked, everywhere it is shown: the tiles and themes of every
+// picker, the name on the header buttons, the two-position switch beside
+// them (it shows the theme on screen, also when the system decides it).
+function winLookDraw() {
+  const now = winThemeNow(), name = winSkinName(winLook.skin)[0];
+  for (const host of [popEl, sideLook, introBox]) {
+    for (const b of host.querySelectorAll('[data-skin]')) b.setAttribute('aria-checked', b.getAttribute('data-skin') === winLook.skin ? 'true' : 'false');
+    for (const b of host.querySelectorAll('[data-theme-set]')) b.setAttribute('aria-checked', b.getAttribute('data-theme-set') === winLook.theme ? 'true' : 'false');
+  }
+  for (const w of WIN_HEADERS) {
+    $id('lookName-' + w).textContent = name;
+    $id('thL-' + w).setAttribute('aria-checked', now === 'light' ? 'true' : 'false');
+    $id('thD-' + w).setAttribute('aria-checked', now === 'dark' ? 'true' : 'false');
+  }
+}
+function winRenderPop() {
+  popEl.innerHTML = '';
+  popEl.appendChild(el('div', 'pop-t', T.winSkin));
+  winLookBox(popEl, 'pop-t');
   const np = winNotifyState();
   if (np) {
     popEl.appendChild(el('div', 'pop-t', T.winNotify));
@@ -230,21 +302,78 @@ function winRenderPop() {
     popEl.appendChild(row);
   }
 }
-function winPopClose() {
-  if (!popEl.classList.contains('open')) return;
-  popEl.classList.remove('open');
-  $id('lookBtn').setAttribute('aria-expanded', 'false');
+// One panel, several ways in: the button in the header of the skin on screen,
+// and the small one beside the account.
+let winPopFrom = null;   // the button the panel was opened with: Esc gives it the focus back
+function winLookBtns() { return [$id('lookBtn')].concat(WIN_HEADERS.map((w) => $id('look-' + w))); }
+function winLookBtnSeen() {
+  for (const w of WIN_HEADERS) {
+    const b = $id('look-' + w);
+    if (b.getClientRects && b.getClientRects().length) return b;
+  }
+  return null;
 }
-$id('lookBtn').onclick = () => {
-  if (popEl.classList.contains('open')) { winPopClose(); return; }
+function winPopClose(back) {
+  if (!popEl.classList.contains('open')) return;
+  const a = document.activeElement;
+  const inside = !!a && !!popEl.contains && popEl.contains(a);
+  popEl.classList.remove('open');
+  for (const b of winLookBtns()) b.setAttribute('aria-expanded', 'false');
+  // Closed from the keyboard, or with the focus in it: back to its button.
+  if ((back || inside) && winPopFrom && winPopFrom.focus) winPopFrom.focus();
+}
+function winPopOpen(from) {
+  if (popEl.classList.contains('open')) {
+    const same = winPopFrom === from;
+    winPopClose(true);
+    if (same) return;
+  }
   closeMenu();
+  winPopFrom = from;
   winRenderPop();
   popEl.classList.add('open');
-  $id('lookBtn').setAttribute('aria-expanded', 'true');
-  winPlace(popEl, $id('lookBtn'));
+  for (const b of winLookBtns()) b.setAttribute('aria-expanded', b === from ? 'true' : 'false');
+  winPlace(popEl, from);
   const first = popEl.querySelector('[aria-checked="true"]');
   if (first && first.focus) first.focus();
+}
+$id('lookBtn').onclick = () => winPopOpen($id('lookBtn'));
+for (const w of WIN_HEADERS) {
+  const b = $id('look-' + w);
+  b.onclick = () => {
+    // A narrow window has no room for the panel beside its button: the whole
+    // choice is at the top of the drawer, and the button opens the drawer.
+    if (winNarrow()) {
+      winPopClose();
+      winSideOpen(true);
+      const on = sideLook.querySelector('[aria-checked="true"]');
+      if (on && on.focus) setTimeout(() => on.focus(), 0);
+      return;
+    }
+    winPopOpen(b);
+  };
+  $id('thL-' + w).onclick = () => winSetTheme('light');
+  $id('thD-' + w).onclick = () => winSetTheme('dark');
+}
+winLookBox(sideLook, '');
+winLookBox(introBox, '');
+introEl.hidden = !winIntro;
+$id('introDone').onclick = () => {
+  // Kept as it is: that is a choice too, and the block does not come back.
+  winStore('skin', winLook.skin);
+  winStore('theme', winLook.theme);
+  winIntroOver();
+  if (inp && inp.focus) inp.focus();
 };
+winLookDraw();
+winFrame();
+if (window.matchMedia) {
+  // The system changed its theme: what follows it is drawn anew.
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const onScheme = () => { winLookDraw(); winFrame(); };
+  if (mq.addEventListener) mq.addEventListener('change', onScheme);
+  else if (mq.addListener) mq.addListener(onScheme);
+}
 
 // Puts a floating box next to what opened it, inside the window.
 // A list as tall as it is, up to the room on its side of the anchor; a longer
@@ -297,6 +426,8 @@ if (typeof ResizeObserver !== 'undefined') {
 // An empty chat keeps its greeting in view and only brings a new line into it.
 scroll = function () {
   if (winEmpty) {
+    // The first run: the greeting is taller than usual by the looks; it is read from its top.
+    if (winIntro) { log.scrollTop = 0; return; }
     const kids = log.children;
     let last = kids[kids.length - 1];
     if (last === infoEl) last = kids[kids.length - 2];
@@ -1506,7 +1637,7 @@ document.addEventListener('click', (e) => {
       break;
     }
   }
-  if (popEl.classList.contains('open') && !path.includes(popEl) && !path.includes($id('lookBtn'))) winPopClose();
+  if (popEl.classList.contains('open') && !path.includes(popEl) && !winLookBtns().some((b) => path.includes(b))) winPopClose();
 }, true);
 function winOpenList(kind) {
   if (menuView === kind) { closeMenu(); return; }
@@ -1526,7 +1657,7 @@ for (const b of winAll('.js-menu')) b.onclick = () => $id('cmdBtn').onclick();
 for (const b of winAll('.js-hist')) b.onclick = () => $id('histBtn').onclick();
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  winPopClose();
+  winPopClose(true);
   winSideOpen(false);
   if (sheetEl.classList.contains('open')) winCloseCards();
   winTopSync();
@@ -1721,6 +1852,8 @@ function winSync() {
   if (empty !== winEmpty) {
     // Leaving an empty chat: a card opened in it stays behind.
     if (winEmpty && !empty) { machineOpen = false; machineQr = false; startForced = false; }
+    // The looks were tried and one was picked: the first-run block has done its part.
+    if (winEmpty && !empty && winPicked && winIntro) winIntroOver();
     winEmpty = empty;
     appEl.classList.toggle('is-empty', empty);
     appEl.classList.toggle('is-work', !empty);
@@ -1809,7 +1942,14 @@ window.addEventListener('message', (ev) => {
       winPinned = true;
       break;
     case 'state':
-      if (popEl.classList.contains('open')) winRenderPop();
+      // The account row of the panel may have changed; the focus stays in it.
+      if (popEl.classList.contains('open')) {
+        const a = document.activeElement;
+        const at = a && popEl.contains && popEl.contains(a) ? Array.prototype.indexOf.call(popEl.querySelectorAll('button'), a) : -1;
+        winRenderPop();
+        const again = at >= 0 ? popEl.querySelectorAll('button')[at] : null;
+        if (again && again.focus) again.focus();
+      }
       break;
     case 'machine_state':
     case 'machine_clear':

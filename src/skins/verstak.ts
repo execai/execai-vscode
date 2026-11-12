@@ -109,6 +109,11 @@ const css = String.raw`
 .sk-verstak .tab-t { flex: 1 1 auto; }
 .sk-verstak .tab:not(:hover):not(.active):not(:focus-within) .tab-x { pointer-events: none; }
 .sk-verstak .tabs > .newtab { margin: 0 4px; }
+/* the look: beside the other buttons of the strip, the height of a selector */
+.sk-verstak .tabs > .lookctl { align-self: center; margin-right: 4px; }
+.sk-verstak .lookbtn { height: 26px; padding: 0 8px; border-radius: 5px; background: var(--bg); font-size: 12.5px; }
+.sk-verstak .thseg { padding: 2px; background: var(--bg); }
+.sk-verstak .thseg button { min-width: 26px; height: 22px; }
 .sk-verstak .tabs > .side-show { margin: 0 2px 0 6px; }
 .sk-verstak .app.side-off .tabstrip { border-left: 1px solid var(--line); }
 
@@ -309,7 +314,6 @@ const css = String.raw`
 .sk-verstak .pk:hover { background: var(--hover); }
 .sk-verstak .pk[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .sk-verstak .pk small { font-size: 11.5px; line-height: 1.35; }
-.sk-verstak .pk-sw { border-radius: 4px; }
 .sk-verstak .seg { padding: 3px; gap: 2px; border: 1px solid var(--line); border-radius: 7px; }
 .sk-verstak .seg button { height: 26px; padding: 0 6px; border-radius: 5px; color: var(--dim); font-size: 12px; }
 .sk-verstak .seg button:hover { color: var(--fg); }

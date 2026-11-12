@@ -55,6 +55,7 @@ const WINDOW_ICONS: Record<string, string> = {
   'ban': '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>',
   'stop': '<rect x="7" y="7" width="10" height="10" rx="1.8" fill="currentColor" stroke="none"/>',
   'sun': '<circle cx="12" cy="12" r="3.6"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.800 12H21M5.6 5.6l1.6 1.6M16.800 16.800l1.6 1.6M5.6 18.4l1.6-1.6M16.800 7.2l1.6-1.6"/>',
+  'look': '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M9.5 9.5v10"/>',
   'moon': '<path d="M19.5 14.3A8 8 0 0 1 9.7 4.5a8 8 0 1 0 9.8 9.800z"/>',
 };
 
@@ -79,17 +80,20 @@ function escMarkup(s: string): string {
  * skin ids (see skins/index.ts).
  */
 export function headScript(skins: string[], fallback: string): string {
+  // The theme is dark until the person picks one — whatever the system is
+  // set to. "As the system" is a pick like the other two and is kept as one.
+  // fresh: nothing has been picked yet (the window then shows the looks).
   return `(function () {
-  var d = document.documentElement, skins = ${JSON.stringify(skins)}, s = ${JSON.stringify(fallback)}, t = 'system';
+  var d = document.documentElement, skins = ${JSON.stringify(skins)}, s = ${JSON.stringify(fallback)}, t = 'dark', own = false;
   try {
     var a = localStorage.getItem('execai:ui:skin');
-    if (skins.indexOf(a) >= 0) s = a;
+    if (skins.indexOf(a) >= 0) { s = a; own = true; }
     var b = localStorage.getItem('execai:ui:theme');
-    if (b === 'light' || b === 'dark') t = b;
+    if (b === 'light' || b === 'dark' || b === 'system') { t = b; own = true; }
   } catch (e) { /* no storage: the defaults */ }
   d.className = 'sk-' + s;
   if (t === 'system') d.removeAttribute('data-theme'); else d.setAttribute('data-theme', t);
-  window.execaiLook = { skin: s, theme: t, skins: skins };
+  window.execaiLook = { skin: s, theme: t, skins: skins, fresh: !own };
 })();`;
 }
 
@@ -103,6 +107,15 @@ export function windowMarkup(T: Record<string, string>): string {
     if (!(name in WINDOW_ICONS)) throw new Error('window markup: no icon ' + name);
     return `<svg class="ic${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
   };
+  // The look, in the header of a skin: what is on now, by name, and the theme
+  // beside it. One per header — a skin shows the header it has.
+  const lookCtl = (at: string) => `<div class="lookctl">
+      <button type="button" class="lookbtn" id="look-${at}" title="${t('winLook')}" aria-haspopup="dialog" aria-expanded="false">${i('look')}<span class="lb-k">${t('winSkin')}</span><b class="lb-v" id="lookName-${at}"></b>${i('chev-d', 'lb-c')}</button>
+      <div class="seg thseg" role="radiogroup" aria-label="${t('winTheme')}">
+        <button type="button" role="radio" aria-checked="false" id="thL-${at}" title="${t('winThemeLight')}">${i('sun')}<span>${t('winThemeLight')}</span></button>
+        <button type="button" role="radio" aria-checked="false" id="thD-${at}" title="${t('winThemeDark')}">${i('moon')}<span>${t('winThemeDark')}</span></button>
+      </div>
+    </div>`;
   const sg = (n: number, icon: string) =>
     `<button type="button" class="sg" data-sg="${n}"><span class="sg-ic">${i(icon)}</span><b>${t('winSg' + n)}</b><span class="sg-d">${t('winSg' + n + 'D')}</span></button>`;
   return `
@@ -112,6 +125,7 @@ ${sprite()}
     <button type="button" class="ib navbtn" id="navBtn" title="${t('winNav')}" aria-label="${t('winNav')}" aria-expanded="false">${i('menu')}</button>
     <span class="brand">ExecAI<i class="cur" aria-hidden="true"></i></span>
     <span class="crumb"><span class="c-path" id="topPath"></span><span class="c-sep" aria-hidden="true">/</span><span class="c-chat" id="topChat"></span></span>
+    ${lookCtl('top')}
     <span class="top-meta" id="topMeta"><span class="dot" id="topDot"></span><span id="topHost"></span><span class="tm-ver" id="topVer"></span></span>
     <button type="button" class="ib top-new js-new" title="${t('mNewChat')}" aria-label="${t('mNewChat')}">${i('plus')}</button>
   </header>
@@ -119,6 +133,7 @@ ${sprite()}
   <aside class="side" id="side" aria-label="${t('winChats')}">
     <div class="s-brand"><span class="brand">ExecAI<i class="cur" aria-hidden="true"></i></span><span class="s-ver" id="sideVer"></span><button type="button" class="ib s-collapse js-side" title="${t('winSideHide')}" aria-label="${t('winSideHide')}">${i('sidebar')}</button></div>
     <button type="button" class="newchat js-new">${i('plus')}<span>${t('mNewChat')}</span><kbd class="key" id="newKey">Ctrl N</kbd></button>
+    <section class="side-look" aria-label="${t('winLook')}"><div class="s-label"><span>${t('winSkin')}</span></div><div class="lookbox in-side" id="sideLook"></div></section>
     <div class="s-scroll">
       <div class="s-label"><span>${t('mProject')}</span></div>
       <div class="proj">
@@ -147,6 +162,7 @@ ${sprite()}
     <div class="tabstrip" id="tabs" role="tablist"></div>
     <button type="button" class="ib newtab js-new" id="newTab" title="${t('newTabTitle')}" aria-label="${t('newTabTitle')}">${i('plus')}</button>
     <span class="tabs-sp"></span>
+    ${lookCtl('tabs')}
     <button type="button" class="ib js-hist keep-menu" title="${t('histTitle')}" aria-label="${t('histTitle')}">${i('clock')}</button>
     <button type="button" class="ib js-menu keep-menu" title="${t('cmdTitle')}" aria-label="${t('cmdTitle')}">${i('dots')}</button>
   </nav>
@@ -159,6 +175,7 @@ ${sprite()}
     </div>
     <div class="h-acts">
       <button type="button" class="ib side-show js-new" title="${t('mNewChat')}" aria-label="${t('mNewChat')}">${i('plus')}</button>
+      ${lookCtl('head')}
       <button type="button" class="hbtn js-hist keep-menu" title="${t('histTitle')}">${i('clock')}<span>${t('winHistory')}</span></button>
       <button type="button" class="ib js-menu keep-menu" title="${t('cmdTitle')}" aria-label="${t('cmdTitle')}">${i('dots')}</button>
     </div>
@@ -238,6 +255,12 @@ ${sprite()}
       ${sg(3, 'pencil')}
       ${sg(4, 'agents')}
     </div>
+    <section class="lookintro" id="lookIntro" hidden aria-label="${t('winSkin')}">
+      <div class="sugg-l"><span>${t('winSkin')}</span></div>
+      <p class="li-d">${t('winIntroD')}</p>
+      <div class="lookbox in-feed" id="introLook"></div>
+      <button type="button" class="btn2 li-done" id="introDone">${t('winIntroDone')}</button>
+    </section>
   </div>
 </div>`;
 }

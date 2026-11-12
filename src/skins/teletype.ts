@@ -75,6 +75,17 @@ const css = String.raw`
 .sk-teletype .c-path { max-width: 50%; }
 .sk-teletype .c-chat { color: var(--fg); font-weight: 600; }
 .sk-teletype .top-meta { color: var(--dim); }
+/* the look: a framed word in the strip, turned inside out under the pointer like the other buttons */
+.sk-teletype .lookbtn { height: 26px; padding: 0 8px; border-radius: 0; font: 500 12px var(--mono); }
+.sk-teletype .lookbtn:hover, .sk-teletype .lookbtn[aria-expanded="true"] { background: var(--fg); color: var(--bg); }
+.sk-teletype .lookbtn:hover > *, .sk-teletype .lookbtn[aria-expanded="true"] > * { color: inherit; }
+.sk-teletype .thseg { margin: 0; }
+.sk-teletype .thseg button { min-width: 28px; }
+.sk-teletype .lookbox .pop-skins, .sk-teletype .lookbox .seg { margin: 0; }
+.sk-teletype .lookbox .seg { margin-top: 8px; }
+.sk-teletype .lookbox .pk { margin-bottom: 0; }
+.sk-teletype .lookintro { grid-column: 1 / -1; padding: 0 28px 20px; border-top: 1px solid var(--line2); }
+.sk-teletype .li-d { font-size: 13px; }
 .sk-teletype .tm-ver:not(:empty)::before { content: "│"; margin-right: 8px; color: var(--mute); }
 
 /* the sidebar — an index */
@@ -432,7 +443,6 @@ const css = String.raw`
 .sk-teletype .pk[aria-checked="true"] { background: var(--accent-soft); }
 .sk-teletype .pk b { font: 600 12.5px var(--mono); }
 .sk-teletype .pk small { font: 12px/1.35 var(--font); }
-.sk-teletype .pk-sw { border: 1px solid var(--line2); }
 .sk-teletype .seg button { height: 26px; padding: 0 6px; border: 1px solid var(--line2); margin-right: -1px; font: 500 11.5px var(--mono); color: var(--dim); }
 .sk-teletype .seg button:hover { background: var(--panel); color: var(--fg); }
 .sk-teletype .seg button[aria-checked="true"] { background: var(--fg); color: var(--bg); }
