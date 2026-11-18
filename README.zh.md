@@ -47,7 +47,7 @@
    - 或手动安装：从 [Releases](https://github.com/execai/execai-vscode/releases) 下载 `.vsix` → `Extensions: Install from VSIX…`
 2. 打开一个项目文件夹，左侧会出现 ExecAI 图标。
 3. 首次启动时，扩展会提示**下载智能体**（约 7 MB），它会放进扩展自己的存储目录，
-   无需 sudo。如果 PATH 中已有足够新的 execai（R7.21+），则直接使用它。
+   无需 sudo。如果 PATH 中已有足够新的 execai（R7.26+），则直接使用它。
 
 随后可直接在面板中登录并接入模型：**Getting started** 的每个步骤都有对应按钮，`>_` 菜单里也有同样的入口（「Sign in to ExecAI」「Connect a source」）。
 

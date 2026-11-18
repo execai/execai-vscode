@@ -104,7 +104,7 @@
   "web: other window": "сайт: другое окно",
   "Tasks from the web are accepted by another window: {0}": "Задачи с сайта принимает другое окно: {0}",
   "web: plan needed": "сайт: нужен тариф",
-  "Running tasks from the web is available on the Work and Max plans: {0}": "Запуск задач с сайта доступен на тарифах «Работа» и «Макс»: {0}",
+  "Running tasks from the web is available on the Work, Max and Month plans: {0}": "Запуск задач с сайта доступен на тарифах «Работа», «Макс» и «Месяц»: {0}",
   "web: off": "сайт: выкл",
   "Accepting tasks from the web is turned off.": "Приём задач с сайта выключен.",
   "web: sign in": "сайт: нужен вход",

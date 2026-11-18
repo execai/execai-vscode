@@ -57,14 +57,14 @@ function editorPage(bundle, lang) {
 const EDITOR_PAGE = {
   // sha256 of the whole page, as the unminified build makes it
   full: {
-    en: '8509c2e0310e93754bea0a4e133eabcfd42fb1cefdb54e19685c8e4bc4928e52',
-    ru: '5baf44ef0ad60fc538471cfc971d83e2dea855c8f9329d64997232fca9bd53e3',
+    en: '82153e759e8649c3c1b437c16787d129c29fbad0d3deccb47f5f9214cab3c557',
+    ru: '71b9870c99e51435e13354c56ce8c90d429f4ba9552e8cbb6099d4916f00f8b3',
   },
   // the same with the six functions injected through toString() cut out:
   // a minifier renames their locals, everything around them is plain text
   cut: {
-    en: '78e88b7bb3c1240a8a2d37831a5edfadd7bcbb259f85013a62f0cd8bdc9b6ab0',
-    ru: '504e16dcb988c4d895841e65744b33827c70cd36c92e18297f46c71f0aad07af',
+    en: '745dc6d21dcdd07daf7c62c908ac4f5e7d6d2897e50e00c29c0d4aa5f1d6ce57',
+    ru: 'c5c2999c92848d6168a1fd9c5ed34ead02066a78ce13cf1bc6dbfb91dcb53d6d',
   },
 };
 const cutInjected = (html) => {

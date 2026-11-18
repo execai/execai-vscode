@@ -414,9 +414,12 @@ export function machineRows(ms: MachineView, T: Record<string, string>, now: num
     if (s < 86400) return Math.floor(s / 3600) + ' ' + T.agoHour;
     return Math.floor(s / 86400) + ' ' + T.agoDay;
   };
-  // week_work → «Work»; an unknown plan is shown as the agent named it.
+  // week_work → «Work», month_start → «Month»; an unknown plan is shown as
+  // the agent named it.
   const planName = (p: string) => {
-    const k = String(p || '').toLowerCase().replace(/^(day|week|month|year)_/, '');
+    const code = String(p || '').toLowerCase();
+    if (code === 'month_start') return T.planMonth;
+    const k = code.replace(/^(day|week|month|year)_/, '');
     return k === 'start' ? T.planStart : k === 'work' ? T.planWork : k === 'max' ? T.planMax : p;
   };
   const m = ms.machine;

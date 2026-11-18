@@ -712,3 +712,20 @@ test('public texts: no prices, no "free", no third-party brands in the new strin
     }
   }
 });
+
+// The Month plan (month_start) is a plan of its own, not «Start», and it is
+// named next to Work and Max wherever the panel lists the plans with tasks
+// from the web.
+test('machineRows: month_start is the Month plan; the plan lists name it', () => {
+  for (const [lang, month, start] of [['en', 'Month', 'Start'], ['ru', '«Месяц»', '«Старт»']]) {
+    const T = STRINGS[lang];
+    assert.equal(T.planMonth, month);
+    const rows = machineRows(parseMachineState(ev(full({ machine: { ...full().machine, plan: 'month_start' } }))), T, NOW);
+    const acc = rows.find((r) => r.key === 'account').value;
+    assert.ok(acc.includes(month), `${lang}: ${acc}`);
+    assert.ok(!acc.includes(start) && !acc.includes('month_start'), `${lang}: ${acc}`);
+    assert.ok(T.inboxNoPlan.includes(month), `${lang}: ${T.inboxNoPlan}`);
+  }
+  const weekStart = machineRows(parseMachineState(ev(full({ machine: { ...full().machine, plan: 'week_start' } }))), STRINGS.ru, NOW);
+  assert.ok(weekStart.find((r) => r.key === 'account').value.includes('«Старт»'));
+});

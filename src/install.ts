@@ -46,8 +46,9 @@ export { versionAtLeast };
  * R7.21 never erases a project's memory when its folder is empty or cloned
  * again, decides sync file by file by content and sends sync's notices to
  * the panel.
+ * R7.26 accepts tasks from the web on the Month plan too, as the panel says.
  */
-export const MIN_CLI = 'R7.21';
+export const MIN_CLI = 'R7.26';
 
 const MIRROR = 'https://storage.yandexcloud.net/execai-agent-prod/execai/stable';
 const GITHUB = 'https://github.com/execai/execai-agent/releases/latest/download';

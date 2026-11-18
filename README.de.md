@@ -48,7 +48,7 @@ Panel und Befehle folgen der Anzeigesprache des Editors: **Englisch** und **Russ
 2. Öffne einen Projektordner — links erscheint das ExecAI-Symbol.
 3. Beim ersten Start bietet die Erweiterung an, **den Agenten herunterzuladen** (~7 MB). Er landet
    im Speicher der Erweiterung, ohne sudo. Liegt execai bereits im PATH und ist
-   aktuell genug (R7.21+), wird dieser verwendet.
+   aktuell genug (R7.26+), wird dieser verwendet.
 
 Melde dich danach an und verbinde Modelle direkt im Panel: die Schritte von **Getting started** haben dafür je eine Schaltfläche, das `>_`-Menü hat dasselbe („Sign in to ExecAI“, „Connect a source“).
 

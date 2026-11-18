@@ -48,7 +48,7 @@ The panel and the commands follow the editor's display language: **English** and
 2. Open a project folder — the ExecAI icon appears on the left.
 3. On first run the extension offers to **download the agent** (~7 MB). It lands in the
    extension's storage, no sudo involved. If execai is already in PATH and recent
-   enough (R7.21+), that one is used instead.
+   enough (R7.26+), that one is used instead.
 
 Then sign in and connect models right in the panel: the **Getting started** steps have a button for each, and the `>_` menu has the same ("Sign in to ExecAI", "Connect a source").
 

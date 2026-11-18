@@ -3,6 +3,17 @@
 All notable changes to the ExecAI extension are listed here. Versions follow
 [semver](https://semver.org/); the CLI it drives is versioned separately (`R<major>.<minor>`).
 
+## 0.2.42 — 2026-11-19
+
+### Changed
+
+- **The Month plan comes with tasks from the web, alongside Work and Max.**
+  The panel names the three plans where it says which plans accept tasks
+  from the web chat and the phone, and the machine card shows the Month
+  plan by its own name; it used to appear as Start.
+- **The panel requires the agent 7.26 and offers to update an older one.**
+  An older agent does not accept tasks from the web on the Month plan.
+
 ## 0.2.41 — 2026-11-12
 
 ### Changed

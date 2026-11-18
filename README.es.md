@@ -48,7 +48,7 @@ El panel y los comandos siguen el idioma de la interfaz del editor: hoy se inclu
 2. Abre una carpeta de proyecto: el icono de ExecAI aparecerá a la izquierda.
 3. En el primer arranque la extensión te ofrecerá **descargar el agente** (~7 MB). Se guarda
    en el almacenamiento de la extensión, sin sudo. Si execai ya está en el PATH y es
-   suficientemente reciente (R7.21+), se usa ese.
+   suficientemente reciente (R7.26+), se usa ese.
 
 Después inicia sesión y conecta modelos desde el propio panel: los pasos de **Getting started** tienen un botón para cada cosa, y el menú `>_` ofrece lo mismo («Sign in to ExecAI», «Connect a source»).
 

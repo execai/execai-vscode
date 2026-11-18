@@ -252,7 +252,7 @@ export class PanelCore {
         break;
       case 'no_plan':
         short = l10n.t('web: plan needed');
-        long = l10n.t('Running tasks from the web is available on the Work and Max plans: {0}', displayUrl(PAYMENT_URL));
+        long = l10n.t('Running tasks from the web is available on the Work, Max and Month plans: {0}', displayUrl(PAYMENT_URL));
         break;
       case 'disabled':
         short = l10n.t('web: off');
